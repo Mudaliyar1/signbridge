@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}Capture Studio - {{ model.name }}{% endblock %}
+{% block header_title %}Camera Capture Studio &bull; {{ model.name }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Camera Viewport & Controls Column -->
+    <div class="col-lg-8">
+        <div class="card bg-surface border-secondary border-opacity-25 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-webcam-fill text-primary fs-5"></i>
+                    <h6 class="m-0 text-white fw-bold">Live Hand Tracking Viewfinder</h6>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="recordingBadge" class="badge bg-danger d-none animate-pulse">
+                        <i class="bi bi-circle-fill me-1"></i>REC <span id="recTimer">00:00</span>
+                    </span>
+                    <span id="handStatsBadge" class="badge bg-dark border border-secondary border-opacity-50 text-info small d-none">
+                        <i class="bi bi-hand-index-thumb me-1"></i><span id="handStatsText">Hand: --</span>
+                    </span>
+                    <span id="handStateBadge" class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25">
+                        WAITING FOR HAND
+                    </span>
+                    <span id="cameraStatusBadge" class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25">
+                        Initializing...
+                    </span>
+                </div>
+            </div>
+
+            <!-- Viewport Container -->
+            <div class="card-body p-0 position-relative bg-black d-flex align-items-center justify-content-center" style="min-height: 480px; max-height: 560px; overflow: hidden;" id="viewportContainer">
+                <!-- Live Video Feed -->
+                <video id="liveVideo" autoplay playsinline muted class="w-100 h-100 object-fit-contain"></video>
+
+                <!-- Dynamic Real-Time Hand Landmark & Bounding Box Canvas -->
+                <canvas id="trackingCanvas" class="position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 10;"></canvas>
+
+                <!-- Dynamic Auto-Capture Countdown Overlay -->
+                <div id="captureCountdownOverlay" class="position-absolute top-50 start-50 translate-middle text-center d-none" style="z-index: 25; pointer-events: none;">
+                    <div class="display-1 fw-bolder text-warning text-shadow-lg animate-bounce" id="countdownNumber">3</div>
+                    <span class="badge bg-dark text-warning border border-warning px-3 py-1 fs-6 shadow" id="countdownLabel">Hold Hand Steady</span>
+                </div>
+
+                <!-- Hand-Cropped Review Preview (Frozen After Capture) -->
+                <div id="snapshotReviewContainer" class="position-absolute top-0 start-0 w-100 h-100 d-none bg-black d-flex flex-column align-items-center justify-content-center p-3" style="z-index: 20;">
+                    <div class="text-center mb-2">
+                        <span class="badge bg-success px-3 py-1 mb-1"><i class="bi bi-check-circle me-1"></i>CAPTURED HAND CROP (FACE EXCLUDED)</span>
+                        <div class="text-secondary small">This exact hand region will be saved and passed to CustomSignCNN</div>
+                    </div>
+                    <div class="border border-primary border-opacity-50 rounded-3 overflow-hidden shadow-lg mb-2" style="max-width: 320px; max-height: 320px;">
+                        <canvas id="snapshotCanvas" class="img-fluid object-fit-contain bg-black"></canvas>
+                    </div>
+                    <div id="reviewHandDetails" class="text-secondary small text-center"></div>
+                </div>
+
+                <!-- Recorded Video Player for Review -->
+                <video id="recordedVideoReview" controls playsinline class="position-absolute top-0 start-0 w-100 h-100 object-fit-contain d-none bg-black" style="z-index: 20;"></video>
+
+                <!-- Camera Permission / Offline Overlay -->
+                <div id="cameraErrorOverlay" class="position-absolute d-none text-center p-4" style="z-index: 30;">
+                    <i class="bi bi-camera-video-off text-danger fs-1 mb-2 d-block"></i>
+                    <h5 class="text-white fw-bold mb-1" id="cameraErrorTitle">Camera Access Needed</h5>
+                    <p class="text-secondary small mb-3" id="cameraErrorMessage">Please allow camera permissions in your browser to track hand landmarks.</p>
+                    <button class="btn btn-primary btn-sm" onclick="startCamera()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Request Camera Access
+                    </button>
+                </div>
+            </div>
+
+            <!-- Capture Controller Footer -->
+            <div class="card-footer bg-surface border-top border-secondary border-opacity-25 p-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <!-- Left: Camera selector & Landmark Toggle -->
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div class="d-flex align-items-center gap-2" style="max-width: 220px;">
+                            <i class="bi bi-camera text-secondary"></i>
+                            <select id="cameraSelect" class="form-select form-select-sm bg-dark border-secondary border-opacity-50 text-white" onchange="switchCamera(this.value)">
+                                <option value="">Default Camera</option>
+                            </select>
+                        </div>
+                        <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                            <input class="form-check-input" type="checkbox" id="toggleLandmarks" checked onchange="onToggleLandmarks(this.checked)">
+                            <label class="form-check-label text-secondary small fw-semibold" for="toggleLandmarks">Show 21 Landmarks</label>
+                        </div>
+                    </div>
+
+                    <!-- Live Actions Bar -->
+                    <div id="liveControls" class="d-flex align-items-center gap-2">
+                        <button id="btnCaptureImage" class="btn btn-primary d-flex align-items-center gap-2 px-3 py-2" onclick="manualCaptureSnapshot()">
+                            <i class="bi bi-camera-fill fs-5"></i>
+                            <span class="fw-semibold">Capture Now</span>
+                        </button>
+
+                        <button id="btnStartRecord" class="btn btn-danger d-flex align-items-center gap-2 px-3 py-2" onclick="startRecording()">
+                            <i class="bi bi-record-circle-fill fs-5"></i>
+                            <span class="fw-semibold">Record Video</span>
+                        </button>
+
+                        <button id="btnStopRecord" class="btn btn-warning d-none align-items-center gap-2 px-3 py-2" onclick="stopRecording()">
+                            <i class="bi bi-stop-circle-fill fs-5"></i>
+                            <span class="fw-semibold">Stop Recording</span>
+                        </button>
+                    </div>
+
+                    <!-- Review Actions Bar (shown after capture or recording) -->
+                    <div id="reviewControls" class="d-none align-items-center gap-2">
+                        <button class="btn btn-outline-secondary d-flex align-items-center gap-1" onclick="retakeMedia()">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <span>Retake</span>
+                        </button>
+                        <button id="btnSaveSample" class="btn btn-success d-flex align-items-center gap-2 px-4" onclick="saveCapturedSample()">
+                            <i class="bi bi-cloud-arrow-up-fill"></i>
+                            <span class="fw-semibold">Save Hand Sample</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-Time Browser Development Diagnostics Panel -->
+        <div class="card bg-surface border-warning border-opacity-50 mt-4 shadow-sm" id="diagnosticsPanelCard">
+            <div class="card-header bg-dark border-bottom border-warning border-opacity-25 py-2 px-3 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-cpu text-warning"></i>
+                    <strong class="text-warning small text-uppercase" style="letter-spacing: 0.5px;">Browser Runtime Diagnostics</strong>
+                </div>
+                <span class="badge bg-dark border border-secondary border-opacity-50 text-secondary" id="diagFpsBadge">0 FPS</span>
+            </div>
+            <div class="card-body p-3 font-monospace" style="font-size: 0.78rem;">
+                <div class="row g-2">
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">MediaPipe Runtime:</span>
+                            <strong id="diagMpRuntime" class="text-warning">INITIALIZING...</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Hand Landmarker:</span>
+                            <strong id="diagHandLandmarker" class="text-secondary">WAITING</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Camera Feed:</span>
+                            <strong id="diagCameraState" class="text-secondary">CONNECTING</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Frames Processed:</span>
+                            <strong id="diagFramesProcessed" class="text-info">0</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Last Detection:</span>
+                            <strong id="diagLastDetection" class="text-secondary">NEVER</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Hands Detected:</span>
+                            <strong id="diagHandsCount" class="text-secondary">0</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Landmarks:</span>
+                            <strong id="diagLandmarksCount" class="text-secondary">0</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Detection Confidence:</span>
+                            <strong id="diagConfidence" class="text-secondary">--%</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Dynamic Bounding Box:</span>
+                            <strong id="diagBbox" class="text-light">N/A</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Capture State:</span>
+                            <strong id="diagCaptureState" class="text-warning">IDLE</strong>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-md-3">
+                        <div class="p-2 bg-dark rounded border border-secondary border-opacity-25">
+                            <span class="text-secondary d-block" style="font-size: 0.7rem;">Last Error:</span>
+                            <strong id="diagLastError" class="text-success">NONE</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata & Labeling Configuration Column -->
+    <div class="col-lg-4">
+        <!-- Detection Settings Card -->
+        <div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                <h6 class="m-0 text-white fw-bold"><i class="bi bi-sliders2 me-2 text-info"></i>Automatic Detection Settings</h6>
+            </div>
+            <div class="card-body p-3">
+                <!-- Hand Selection Setting -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-semibold mb-1">Hand Selection</label>
+                    <select id="handSelectionSelect" class="form-select form-select-sm bg-dark border-secondary border-opacity-50 text-white" onchange="onHandSelectionChange(this.value)">
+                        <option value="Auto" selected>Auto (Most Prominent Hand)</option>
+                        <option value="Right">Right Hand Only</option>
+                        <option value="Left">Left Hand Only</option>
+                    </select>
+                    <small class="text-secondary" style="font-size: 0.72rem;">Multi-hand support is enabled; captures the targeted hand.</small>
+                </div>
+
+                <!-- Auto-Capture Mode Switch -->
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="small text-white fw-semibold">Automatic Auto-Capture</span>
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input" type="checkbox" id="autoCaptureToggle" checked onchange="onAutoCaptureToggle(this.checked)">
+                    </div>
+                </div>
+                <small class="text-secondary d-block mb-3" style="font-size: 0.72rem;">
+                    In Image mode, holding your hand steady automatically triggers countdown &amp; capture. In Video mode, hand presence automatically starts/stops recording.
+                </small>
+
+                <!-- Stability Duration -->
+                <div class="mb-1">
+                    <div class="d-flex justify-content-between small text-secondary mb-1">
+                        <span>Stability Duration</span>
+                        <span id="stabilityDurationLabel" class="text-info fw-bold">1000 ms</span>
+                    </div>
+                    <input type="range" class="form-range" min="600" max="2500" step="200" value="1000" id="stabilityRange" oninput="document.getElementById('stabilityDurationLabel').innerText = this.value + ' ms'">
+                </div>
+            </div>
+        </div>
+
+        <!-- Explicit Labeling Association Card -->
+        <div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                <h6 class="m-0 text-white fw-bold"><i class="bi bi-tags-fill me-2 text-primary"></i>Dataset Labeling Assignment</h6>
+                <small class="text-secondary" style="font-size: 0.75rem;">Model &rarr; Sign Class &rarr; Participant &rarr; Sample</small>
+            </div>
+            <div class="card-body p-4">
+                <!-- Model Badge -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-semibold">Target Model</label>
+                    <div class="p-2 bg-dark rounded-2 border border-secondary border-opacity-25 text-white small fw-semibold">
+                        <i class="bi bi-cpu me-1 text-primary"></i>{{ model.name }} (v{{ model.version }})
+                    </div>
+                </div>
+
+                <!-- Sign Class Selector -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label class="form-label text-secondary small fw-semibold m-0">Sign Class</label>
+                        <a href="/admin/models/{{ model.id }}/classes" class="text-primary small text-decoration-none">+ New Sign</a>
+                    </div>
+                    {% if classes|length == 0 %}
+                    <div class="alert alert-warning p-2 small m-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>No sign classes yet. <a href="/admin/models/{{ model.id }}/classes" class="alert-link">Create one</a> first.
+                    </div>
+                    {% else %}
+                    <select id="targetClassSelect" class="form-select bg-dark border-secondary border-opacity-50 text-white" onchange="onSignClassChange()">
+                        {% for c in classes %}
+                        <option value="{{ c.id }}" data-name="{{ c.name }}" data-type="{{ c.sign_type }}" data-lang="{{ c.language }}" {% if preselected_sign == c.id %}selected{% endif %}>
+                            {{ c.name }} &bull; {{ c.language }} ({{ c.sign_type }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
+
+                <!-- Participant Selector -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label class="form-label text-secondary small fw-semibold m-0">Participant (Signer)</label>
+                        <a href="/admin/participants" class="text-primary small text-decoration-none">+ Register</a>
+                    </div>
+                    {% if participants|length == 0 %}
+                    <div class="alert alert-warning p-2 small m-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>No participants registered. <a href="/admin/participants" class="alert-link">Add one</a> with consent.
+                    </div>
+                    {% else %}
+                    <select id="targetParticipantSelect" class="form-select bg-dark border-secondary border-opacity-50 text-white">
+                        {% for p in participants %}
+                        <option value="{{ p.participant_id }}">
+                            {{ p.participant_id }} &mdash; {{ p.display_name }} ({{ p.consent_status }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
+
+                <!-- Capture Mode Toggle -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-semibold">Capture Mode</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="captureMode" id="modeImage" value="IMAGE" checked onchange="onModeChange('IMAGE')">
+                        <label class="btn btn-outline-secondary" for="modeImage"><i class="bi bi-camera me-1"></i>Image (Static)</label>
+
+                        <input type="radio" class="btn-check" name="captureMode" id="modeVideo" value="VIDEO" onchange="onModeChange('VIDEO')">
+                        <label class="btn btn-outline-secondary" for="modeVideo"><i class="bi bi-camera-video me-1"></i>Video (Dynamic)</label>
+                    </div>
+                </div>
+
+                <!-- Optional Notes -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-semibold">Collector Notes (Optional)</label>
+                    <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="sampleNotes" placeholder="e.g. Right hand, clear lighting">
+                </div>
+
+                <!-- Live Metadata Confirmation Card -->
+                <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                    <span class="text-secondary text-uppercase fw-semibold d-block mb-2" style="font-size: 0.7rem;">Active Sample Label:</span>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-secondary small">Label:</span>
+                        <strong class="text-white" id="metaReviewSign">WATER</strong>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-secondary small">Signer:</span>
+                        <span class="text-light" id="metaReviewParticipant">Participant 001</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary small">Media Type:</span>
+                        <span class="badge bg-primary bg-opacity-25 text-primary" id="metaReviewType">IMAGE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Upload Option Card -->
+        <div class="card bg-surface border-secondary border-opacity-25">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                <h6 class="m-0 text-white fw-bold"><i class="bi bi-upload me-2 text-primary"></i>Upload Existing Media</h6>
+            </div>
+            <div class="card-body p-4">
+                <form id="mediaUploadForm" onsubmit="handleMediaUpload(event)">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Select Image or Video File</label>
+                        <input type="file" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="uploadFileInput" accept=".jpg,.jpeg,.png,.webp,.mp4,.webm" required>
+                        <small class="text-secondary" style="font-size: 0.72rem;">Supported: JPG, PNG, WEBP, MP4, WEBM</small>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary w-100" id="btnUploadMedia">
+                        <i class="bi bi-cloud-arrow-up me-1"></i>Upload & Save Sample
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- MediaPipe Hands & Camera Utils (Local with CDN fallback) -->
+<script src="/static/vendor/mediapipe/camera_utils.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';"></script>
+<script src="/static/vendor/mediapipe/hands.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';"></script>
+
+<script>
+    const MODEL_ID = "{{ model.id }}";
+</script>
+<script src="/static/js/camera.js"></script>
+{% endblock %}

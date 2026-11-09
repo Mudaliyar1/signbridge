@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Storage Management - SignBridge{% endblock %}
+{% block header_title %}Storage Architecture &bull; Cloudinary & MongoDB Atlas{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="text-white fw-bold mb-1">Cloud Media Storage</h4>
+        <p class="text-secondary small m-0">Production media hosted on Cloudinary with metadata strictly persisted in MongoDB Atlas.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 d-flex align-items-center gap-2">
+            <span class="status-indicator-dot bg-success"></span>
+            <span>Cloudinary Connected</span>
+        </span>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+    <!-- Stat 1: Total Cloud Assets -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Cloud Assets</span>
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-2 p-2">
+                        <i class="bi bi-cloud-check-fill fs-5"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1 text-white">{{ total_cloudinary }}</h3>
+                <small class="text-secondary">Tracked in MongoDB Atlas</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 2: Cloud Images -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Cloud Images</span>
+                    <div class="stat-icon bg-info bg-opacity-10 text-info rounded-2 p-2">
+                        <i class="bi bi-image fs-5"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1 text-white">{{ images_count }}</h3>
+                <small class="text-secondary">Static sign samples</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 3: Cloud Videos -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Cloud Videos</span>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-2 p-2">
+                        <i class="bi bi-camera-video fs-5"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1 text-white">{{ videos_count }}</h3>
+                <small class="text-secondary">Dynamic motion sequences</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat 4: Legacy Local Samples -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Local Disk</span>
+                    <div class="stat-icon bg-secondary bg-opacity-10 text-secondary rounded-2 p-2">
+                        <i class="bi bi-hdd fs-5"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1 text-white">{{ total_local }}</h3>
+                <small class="text-secondary">Unmigrated local files</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Left: Cloudinary Configuration & Folder Scheme -->
+    <div class="col-lg-6">
+        <div class="card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                <h6 class="m-0 text-white fw-bold"><i class="bi bi-gear-wide-connected me-2 text-primary"></i>Cloudinary Configuration</h6>
+            </div>
+            <div class="card-body p-4">
+                <table class="table table-dark table-borderless m-0">
+                    <tbody>
+                        <tr>
+                            <td class="text-secondary ps-0" style="width: 40%;">Primary Provider</td>
+                            <td class="text-white fw-semibold">Cloudinary (SaaS Media Cloud)</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary ps-0">Cloud Name</td>
+                            <td><code class="text-info">{{ cloud_name }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary ps-0">Root Folder Prefix</td>
+                            <td><code class="text-warning">{{ folder_prefix }}/</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary ps-0">Images Path</td>
+                            <td><code class="text-secondary small">{{ folder_prefix }}/models/{model_id}/samples/images/{class_id}/</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary ps-0">Videos Path</td>
+                            <td><code class="text-secondary small">{{ folder_prefix }}/models/{model_id}/samples/videos/{class_id}/</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary ps-0">Security</td>
+                            <td><span class="badge bg-success bg-opacity-25 text-success">API Secret Isolated to Backend</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Real Cloudinary Live Account Usage -->
+    <div class="col-lg-6">
+        <div class="card bg-surface border-secondary border-opacity-25 h-100">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3 d-flex align-items-center justify-content-between">
+                <h6 class="m-0 text-white fw-bold"><i class="bi bi-speedometer2 me-2 text-primary"></i>Cloudinary Account Usage (Live API)</h6>
+                {% if cloud_usage.success %}
+                <span class="badge bg-dark border border-secondary border-opacity-50 text-light">{{ cloud_usage.plan }} Plan</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-4">
+                {% if cloud_usage.success %}
+                <div class="row g-3">
+                    <!-- Storage Used -->
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                            <span class="text-secondary small text-uppercase d-block mb-1">Storage Usage</span>
+                            {% set storage_bytes = cloud_usage.storage.usage or 0 %}
+                            <h5 class="fw-bold text-white m-0">
+                                {% if storage_bytes > 1048576 %}
+                                {{ (storage_bytes / 1048576)|round(2) }} MB
+                                {% else %}
+                                {{ (storage_bytes / 1024)|round(1) }} KB
+                                {% endif %}
+                            </h5>
+                            <small class="text-secondary" style="font-size: 0.72rem;">Media stored on Cloudinary</small>
+                        </div>
+                    </div>
+
+                    <!-- Bandwidth Used -->
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                            <span class="text-secondary small text-uppercase d-block mb-1">Bandwidth</span>
+                            {% set bw_bytes = cloud_usage.bandwidth.usage or 0 %}
+                            <h5 class="fw-bold text-white m-0">
+                                {% if bw_bytes > 1048576 %}
+                                {{ (bw_bytes / 1048576)|round(2) }} MB
+                                {% else %}
+                                {{ (bw_bytes / 1024)|round(1) }} KB
+                                {% endif %}
+                            </h5>
+                            <small class="text-secondary" style="font-size: 0.72rem;">Delivery traffic</small>
+                        </div>
+                    </div>
+
+                    <!-- Objects / Assets -->
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                            <span class="text-secondary small text-uppercase d-block mb-1">Cloud Objects</span>
+                            <h5 class="fw-bold text-white m-0">{{ cloud_usage.objects.usage or 0 }}</h5>
+                            <small class="text-secondary" style="font-size: 0.72rem;">Total assets in cloud</small>
+                        </div>
+                    </div>
+
+                    <!-- Transformations -->
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                            <span class="text-secondary small text-uppercase d-block mb-1">Transformations</span>
+                            <h5 class="fw-bold text-white m-0">{{ cloud_usage.transformations.usage or 0 }}</h5>
+                            <small class="text-secondary" style="font-size: 0.72rem;">Optimization transforms</small>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-info-circle text-secondary fs-2 mb-2 d-block"></i>
+                    <p class="text-secondary small mb-0">{{ cloud_usage.error or "Usage metrics could not be fetched from Cloudinary API." }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

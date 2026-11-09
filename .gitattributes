@@ -1,0 +1,30 @@
+# Set default behavior to automatically normalize line endings to LF
+* text=auto eol=lf
+
+# Explicitly declare text files
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.env.example text eol=lf
+
+# Declare binary files (prevent Git from corrupting or modifying line endings)
+*.pt binary
+*.pth binary
+*.task binary
+*.tflite binary
+*.wasm binary
+*.binarypb binary
+*.joblib binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.ico binary

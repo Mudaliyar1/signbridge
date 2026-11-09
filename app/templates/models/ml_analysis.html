@@ -1,0 +1,1187 @@
+{% extends "base.html" %}
+
+{% block title %}ML Analysis &bull; {{ model.name }}{% endblock %}
+{% block header_title %}Academic Machine Learning Studio &bull; {{ model.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ml-nav-pills .nav-link {
+        color: #94a3b8;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .ml-nav-pills .nav-link.active {
+        background-color: #38bdf8;
+        color: #0f172a;
+        font-weight: 600;
+    }
+    .ml-nav-pills .nav-link:hover:not(.active) {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #f1f5f9;
+    }
+    .stat-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+    }
+    .chart-container {
+        background: #0f1318;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+    .chart-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+    }
+    .matrix-cell {
+        width: 48px;
+        height: 48px;
+        text-align: center;
+        vertical-align: middle;
+        font-weight: 600;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Header & Model Workspace Tabs -->
+<div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+    <div class="card-body p-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h4 class="fw-bold text-white m-0">{{ model.name }}</h4>
+                    <span class="badge bg-dark border border-secondary border-opacity-50 text-light">v{{ model.version }}</span>
+                    <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25 px-2 py-1">
+                        <i class="bi bi-mortarboard-fill me-1"></i>ACADEMIC ML WORKSPACE
+                    </span>
+                </div>
+                <p class="text-secondary small m-0">
+                    Indian Sign Language (ISL) Academic ML Studio: Classical ML (KNN, SVM, Decision Tree), Scratch CNN, EDA, and Unsupervised K-Means Clustering.
+                </p>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <button onclick="loadComparisonData()" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    <span>Refresh Analytics</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs border-secondary border-opacity-25 mt-4">
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}"><i class="bi bi-info-circle me-1"></i>Overview</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/classes"><i class="bi bi-tag me-1"></i>Sign Classes ({{ classes_count }})</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/dataset"><i class="bi bi-collection-play me-1"></i>Dataset ({{ total_samples_count }})</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/capture"><i class="bi bi-camera me-1"></i>Capture</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/testing"><i class="bi bi-speedometer2 me-1"></i>Testing Studio</a></li>
+            <li class="nav-item"><a class="nav-link active text-white fw-semibold bg-dark border-secondary border-opacity-25 border-bottom-0" href="/admin/models/{{ model.id }}/ml-analysis"><i class="bi bi-bar-chart-line-fill me-1 text-primary"></i>ML Analysis</a></li>
+        </ul>
+    </div>
+</div>
+
+<!-- ML Analysis Sub-Navigation Pills -->
+<div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+    <div class="card-body p-2">
+        <ul class="nav nav-pills ml-nav-pills gap-1 flex-wrap" id="mlTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pill-overview-tab" data-bs-toggle="pill" data-bs-target="#pill-overview" type="button" role="tab">
+                    <i class="bi bi-database me-1"></i>1. Dataset Overview
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-eda-tab" data-bs-toggle="pill" data-bs-target="#pill-eda" type="button" role="tab" onclick="loadEDAData()">
+                    <i class="bi bi-graph-up-arrow me-1"></i>2. Exploratory Data Analysis (EDA)
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-algorithms-tab" data-bs-toggle="pill" data-bs-target="#pill-algorithms" type="button" role="tab">
+                    <i class="bi bi-diagram-3 me-1"></i>3. ML Algorithms
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-training-tab" data-bs-toggle="pill" data-bs-target="#pill-training" type="button" role="tab">
+                    <i class="bi bi-gear-wide-connected me-1"></i>4. Training & Tuning
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-comparison-tab" data-bs-toggle="pill" data-bs-target="#pill-comparison" type="button" role="tab" onclick="loadComparisonData()">
+                    <i class="bi bi-trophy me-1"></i>5. Model Comparison
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-kmeans-tab" data-bs-toggle="pill" data-bs-target="#pill-kmeans" type="button" role="tab">
+                    <i class="bi bi-pie-chart me-1"></i>6. K-Means Clustering
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pill-history-tab" data-bs-toggle="pill" data-bs-target="#pill-history" type="button" role="tab" onclick="loadHistoryData()">
+                    <i class="bi bi-clock-history me-1"></i>7. Experiment History
+                </button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Tab Contents -->
+<div class="tab-content" id="mlTabContent">
+
+    <!-- SUBSECTION 1: DATASET OVERVIEW -->
+    <div class="tab-pane fade show active" id="pill-overview" role="tabpanel">
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-lg-3">
+                <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-secondary fw-semibold text-uppercase">Total Samples</small>
+                        <i class="bi bi-collection text-info fs-5"></i>
+                    </div>
+                    <h3 class="fw-bold text-white mb-0">{{ total_samples_count }}</h3>
+                    <small class="text-success"><i class="bi bi-check-circle me-1"></i>{{ valid_samples_count }} Verified Valid</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-secondary fw-semibold text-uppercase">Sign Classes</small>
+                        <i class="bi bi-tag text-warning fs-5"></i>
+                    </div>
+                    <h3 class="fw-bold text-white mb-0">{{ classes_count }}</h3>
+                    <small class="text-secondary">ISL vocabulary labels</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-secondary fw-semibold text-uppercase">Participants</small>
+                        <i class="bi bi-people text-success fs-5"></i>
+                    </div>
+                    <h3 class="fw-bold text-white mb-0">{{ participants_count }}</h3>
+                    <small class="text-secondary">Consent tracked</small>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-secondary fw-semibold text-uppercase">Feature Representation</small>
+                        <i class="bi bi-hand-index-thumb text-primary fs-5"></i>
+                    </div>
+                    <h3 class="fw-bold text-white mb-0">63-D</h3>
+                    <small class="text-secondary">21 MediaPipe Landmarks (x,y,z)</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-surface border-secondary border-opacity-25 mb-4">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                <h6 class="m-0 fw-bold text-white"><i class="bi bi-tags-fill text-warning me-2"></i>Configured ISL Sign Classes</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle m-0">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th class="ps-4">Sign Label</th>
+                                <th>Type</th>
+                                <th>Spoken Output Text</th>
+                                <th>Language</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in classes %}
+                            <tr>
+                                <td class="ps-4 fw-semibold text-white">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">{{ c.name }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary bg-opacity-25 text-light">{{ c.type or "STATIC" }}</span>
+                                </td>
+                                <td class="text-secondary">{{ c.output_text or c.name }}</td>
+                                <td><span class="badge bg-dark text-info border border-secondary border-opacity-25">{{ c.language or "ISL" }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 2: EDA -->
+    <div class="tab-pane fade" id="pill-eda" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold text-white m-0">Exploratory Data Analysis (EDA)</h5>
+                <small class="text-secondary">Live statistics and Matplotlib & Seaborn visualizations generated directly from MongoDB Atlas</small>
+            </div>
+            <button onclick="loadEDAData()" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-clockwise me-1"></i>Recompute EDA
+            </button>
+        </div>
+
+        <div id="edaLoading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="text-secondary small mt-2">Computing live MongoDB Atlas statistics and rendering charts...</div>
+        </div>
+
+        <div id="edaContent" class="d-none">
+            <!-- Statistical Summary Cards -->
+            <div class="card bg-surface border-secondary border-opacity-25 mb-4">
+                <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                    <h6 class="m-0 fw-bold text-white"><i class="bi bi-calculator text-primary me-2"></i>Numerical Features Statistical Summary</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover align-middle m-0" id="edaStatsTable">
+                            <thead>
+                                <tr class="text-secondary small text-uppercase">
+                                    <th class="ps-4">Metric / Variable</th>
+                                    <th>Mean</th>
+                                    <th>Median</th>
+                                    <th>Std Dev</th>
+                                    <th>Min</th>
+                                    <th>Max</th>
+                                    <th>Q1 (25%)</th>
+                                    <th>Q3 (75%)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="edaStatsBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Charts Grid -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="chart-container h-100">
+                        <h6 class="text-white fw-semibold mb-2">Class Distribution (Univariate)</h6>
+                        <div id="chartClassDist" class="text-center"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-container h-100">
+                        <h6 class="text-white fw-semibold mb-2">Media & Sign Modality Breakdown</h6>
+                        <div id="chartMediaDist" class="text-center"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-container h-100">
+                        <h6 class="text-white fw-semibold mb-2">Samples per Participant</h6>
+                        <div id="chartPartDist" class="text-center"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-container h-100">
+                        <h6 class="text-white fw-semibold mb-2">Landmark Coordinate Correlation Heatmap</h6>
+                        <div id="chartCorrHeatmap" class="text-center"></div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="chart-container">
+                        <h6 class="text-white fw-semibold mb-2">Fingertip Landmark Variance (Boxplot)</h6>
+                        <div id="chartBoxplot" class="text-center"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 3: ML ALGORITHMS -->
+    <div class="tab-pane fade" id="pill-algorithms" role="tabpanel">
+        <div class="row g-4 mb-4">
+            <!-- KNN -->
+            <div class="col-lg-6">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary bg-opacity-25 text-primary fs-6 p-2"><i class="bi bi-people-fill"></i></span>
+                                <h5 class="fw-bold text-white m-0">K-Nearest Neighbors (KNN)</h5>
+                            </div>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Instance-Based</span>
+                        </div>
+                        <p class="text-secondary small mb-3">
+                            Classifies gestures by measuring Euclidean or Manhattan distance against normalized training landmark vectors. Hand posture is assigned based on majority vote of the K closest neighbors.
+                        </p>
+                        <div class="bg-dark p-3 rounded-3 border border-secondary border-opacity-25 mb-3 small text-secondary">
+                            <div><strong>Input Vector:</strong> 63-D Normalized Hand Landmarks ($21 \times 3$)</div>
+                            <div><strong>Distance Metrics:</strong> Euclidean ($L_2$), Manhattan ($L_1$)</div>
+                            <div><strong>Hyperparameters:</strong> $n\_neighbors \in \{1, 3, 5, 7\}$, $weights \in \{\text{uniform, distance}\}$</div>
+                            <div><strong>Presence Gating:</strong> Strict NO_HAND rejection if landmarks absent</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SVM -->
+            <div class="col-lg-6">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-info bg-opacity-25 text-info fs-6 p-2"><i class="bi bi-bounding-box-circles"></i></span>
+                                <h5 class="fw-bold text-white m-0">Support Vector Machine (SVM)</h5>
+                            </div>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Max-Margin</span>
+                        </div>
+                        <p class="text-secondary small mb-3">
+                            Learns optimal separating hyperplanes between distinct ISL gesture classes in high-dimensional landmark space. Features are scaled using StandardScaler fitted strictly on the training partition.
+                        </p>
+                        <div class="bg-dark p-3 rounded-3 border border-secondary border-opacity-25 mb-3 small text-secondary">
+                            <div><strong>Input Vector:</strong> 63-D Normalized Hand Landmarks ($21 \times 3$)</div>
+                            <div><strong>Feature Scaling:</strong> StandardScaler (Strict Train Fit, Zero Test Leakage)</div>
+                            <div><strong>Kernels:</strong> Radial Basis Function (RBF), Linear</div>
+                            <div><strong>Hyperparameters:</strong> $C \in \{0.1, 1.0, 10.0\}$, $\gamma \in \{\text{scale, auto}\}$</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decision Tree -->
+            <div class="col-lg-6">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-warning bg-opacity-25 text-warning fs-6 p-2"><i class="bi bi-diagram-3-fill"></i></span>
+                                <h5 class="fw-bold text-white m-0">Decision Tree</h5>
+                            </div>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Rule-Based</span>
+                        </div>
+                        <p class="text-secondary small mb-3">
+                            Recursively partitions normalized landmark coordinate space using axis-aligned orthogonal decision rules based on information gain (Entropy) or Gini impurity.
+                        </p>
+                        <div class="bg-dark p-3 rounded-3 border border-secondary border-opacity-25 mb-3 small text-secondary">
+                            <div><strong>Input Vector:</strong> 63-D Normalized Hand Landmarks ($21 \times 3$)</div>
+                            <div><strong>Splitting Criteria:</strong> Gini Impurity, Shannon Entropy</div>
+                            <div><strong>Hyperparameters:</strong> $max\_depth \in \{5, 10, \text{None}\}$, $min\_samples\_split$</div>
+                            <div><strong>Explainability:</strong> Full white-box hierarchical decision trace</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom CNN -->
+            <div class="col-lg-6">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-danger bg-opacity-25 text-danger fs-6 p-2"><i class="bi bi-cpu-fill"></i></span>
+                                <h5 class="fw-bold text-white m-0">CustomSignCNN (Deep Learning)</h5>
+                            </div>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Neural Network</span>
+                        </div>
+                        <p class="text-secondary small mb-3">
+                            Our scratch-built 4-block Convolutional Neural Network trained on raw $224 \times 224$ hand-cropped images. Zero pretrained weights. Evaluated on the identical held-out test partition.
+                        </p>
+                        <div class="bg-dark p-3 rounded-3 border border-secondary border-opacity-25 mb-3 small text-secondary">
+                            <div><strong>Input Tensor:</strong> RGB Image ($3 \times 224 \times 224$)</div>
+                            <div><strong>Architecture:</strong> 4 Conv Blocks (32, 64, 128, 256), BatchNorm, MaxPool, FC(512)</div>
+                            <div><strong>Presence Gate:</strong> Classical & MediaPipe hand presence gating</div>
+                            <div><strong>Pretrained Weights:</strong> None (Strict scratch training policy)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 4: TRAINING & TUNING STUDIO -->
+    <div class="tab-pane fade" id="pill-training" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card bg-surface border-secondary border-opacity-25">
+                    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                        <h6 class="m-0 fw-bold text-white"><i class="bi bi-sliders text-primary me-2"></i>Configure Hyperparameters & Run Pipeline</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="trainForm" onsubmit="handleStartTraining(event)">
+                            <!-- KNN Configuration -->
+                            <div class="mb-3 p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-white"><i class="bi bi-people text-primary me-1"></i>KNN Hyperparameters</span>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary">GridSearchCV</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">K Neighbors</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="knnNeighbors">
+                                            <option value="Auto">Auto (1, 3, 5, 7)</option>
+                                            <option value="1">K = 1</option>
+                                            <option value="3">K = 3</option>
+                                            <option value="5">K = 5</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Weights</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="knnWeights">
+                                            <option value="Auto">Auto (uniform, distance)</option>
+                                            <option value="uniform">Uniform</option>
+                                            <option value="distance">Distance Weighted</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Distance Metric</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="knnMetric">
+                                            <option value="Auto">Auto (euclidean, manhattan)</option>
+                                            <option value="euclidean">Euclidean (L2)</option>
+                                            <option value="manhattan">Manhattan (L1)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SVM Configuration -->
+                            <div class="mb-3 p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-white"><i class="bi bi-bounding-box text-info me-1"></i>SVM Hyperparameters</span>
+                                    <span class="badge bg-info bg-opacity-10 text-info">StandardScaler Pipeline</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Regularization (C)</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="svmC">
+                                            <option value="Auto">Auto (0.1, 1.0, 10.0)</option>
+                                            <option value="0.1">0.1</option>
+                                            <option value="1.0">1.0</option>
+                                            <option value="10.0">10.0</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Kernel Function</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="svmKernel">
+                                            <option value="Auto">Auto (rbf, linear)</option>
+                                            <option value="rbf">RBF (Radial Basis)</option>
+                                            <option value="linear">Linear</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Kernel Coefficient (&gamma;)</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="svmGamma">
+                                            <option value="Auto">Auto (scale, auto)</option>
+                                            <option value="scale">Scale</option>
+                                            <option value="auto">Auto</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Decision Tree Configuration -->
+                            <div class="mb-3 p-3 bg-dark rounded-3 border border-secondary border-opacity-25">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-white"><i class="bi bi-diagram-3 text-warning me-1"></i>Decision Tree Hyperparameters</span>
+                                    <span class="badge bg-warning bg-opacity-10 text-warning">Pruning Controls</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Criterion</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="dtCriterion">
+                                            <option value="Auto">Auto (gini, entropy)</option>
+                                            <option value="gini">Gini Impurity</option>
+                                            <option value="entropy">Entropy</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Max Depth</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="dtDepth">
+                                            <option value="Auto">Auto (None, 5, 10)</option>
+                                            <option value="5">5</option>
+                                            <option value="10">10</option>
+                                            <option value="None">None (Unlimited)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label text-secondary small">Min Samples Split</label>
+                                        <select class="form-select form-select-sm bg-dark border-secondary text-white" id="dtSplit">
+                                            <option value="Auto">Auto (2, 4)</option>
+                                            <option value="2">2</option>
+                                            <option value="4">4</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Options -->
+                            <div class="form-check form-switch mb-4">
+                                <input class="form-check-input" type="checkbox" id="checkIncludeCNN" checked>
+                                <label class="form-check-label text-secondary small" for="checkIncludeCNN">
+                                    Include CustomSignCNN benchmark on the same held-out test partition
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" id="btnRunTraining">
+                                <i class="bi bi-play-circle-fill me-1"></i>Start Comparative Training & Tuning
+                            </button>
+                        </form>
+
+                        <div id="trainStatusBox" class="mt-3 d-none">
+                            <div class="alert alert-info bg-dark border-info border-opacity-50 text-light d-flex align-items-center gap-3">
+                                <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+                                <div id="trainStatusMsg">Training classical models & evaluating held-out test set...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Single Sample Classical Inference Tester -->
+            <div class="col-lg-5">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                        <h6 class="m-0 fw-bold text-white"><i class="bi bi-lightning-charge text-warning me-2"></i>Test Classical Inference</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <p class="text-secondary small mb-3">
+                            Test trained classical models on a single image. Evaluates MediaPipe presence gating, computes invariant 63-D landmarks, and reports output text and probabilities.
+                        </p>
+                        <form id="testInferForm" onsubmit="handleSingleInference(event)">
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small">Select Algorithm</label>
+                                <select class="form-select bg-dark border-secondary text-white" id="testAlgSelect">
+                                    <option value="SVM">Support Vector Machine (SVM)</option>
+                                    <option value="KNN">K-Nearest Neighbors (KNN)</option>
+                                    <option value="Decision Tree">Decision Tree</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small">Upload Hand Image</label>
+                                <input type="file" class="form-control bg-dark border-secondary text-white" id="testImageFile" accept="image/*" required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary w-100" id="btnTestInfer">
+                                <i class="bi bi-search me-1"></i>Run Inference
+                            </button>
+                        </form>
+
+                        <div id="inferResultBox" class="mt-4 p-3 rounded-3 bg-dark border border-secondary border-opacity-25 d-none">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-primary" id="resAlgBadge">SVM</span>
+                                <span class="badge" id="resStatusBadge">HAND_DETECTED</span>
+                            </div>
+                            <div class="text-center py-2">
+                                <div class="text-secondary small">Recognized ISL Sign</div>
+                                <h3 class="fw-bold text-white m-0" id="resSignText">--</h3>
+                                <div class="text-success small fw-semibold" id="resConfText">Confidence: --%</div>
+                            </div>
+                            <div class="mt-2 pt-2 border-top border-secondary border-opacity-25 d-flex justify-content-between text-secondary small">
+                                <span>Inference Time:</span>
+                                <span class="text-white" id="resTimeText">-- ms</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 5: MODEL COMPARISON -->
+    <div class="tab-pane fade" id="pill-comparison" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold text-white m-0">Model Performance Comparison</h5>
+                <small class="text-secondary">Genuine evaluation results on held-out test samples across classical algorithms and scratch CNN</small>
+            </div>
+            <button onclick="loadComparisonData()" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-clockwise me-1"></i>Reload Table
+            </button>
+        </div>
+
+        <div id="comparisonContainer">
+            <!-- Populated dynamically via JS -->
+            <div class="text-center py-5 text-secondary">
+                <i class="bi bi-hourglass-split fs-2 d-block mb-2"></i>
+                <div>No comparison results loaded yet. Run training to generate results.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 6: K-MEANS CLUSTERING -->
+    <div class="tab-pane fade" id="pill-kmeans" role="tabpanel">
+        <div class="row g-4 mb-4">
+            <div class="col-lg-4">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                        <h6 class="m-0 fw-bold text-white"><i class="bi bi-sliders text-primary me-2"></i>Unsupervised Clustering Controls</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <p class="text-secondary small mb-3">
+                            K-Means groups similar 63-dimensional landmark feature vectors into clusters without using class labels. Evaluates natural geometric separation of hand shapes.
+                        </p>
+                        <form id="kmeansForm" onsubmit="handleRunKMeans(event)">
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small">Number of Clusters (K)</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" min="2" max="6" value="2" id="kmeansKSlider" oninput="document.getElementById('kValLabel').innerText = this.value">
+                                    <span class="badge bg-primary fs-6 px-3" id="kValLabel">2</span>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2" id="btnRunKMeans">
+                                <i class="bi bi-pie-chart-fill me-1"></i>Run K-Means Clustering
+                            </button>
+                        </form>
+
+                        <div id="kmeansMetricsBox" class="mt-4 p-3 bg-dark rounded-3 border border-secondary border-opacity-25 d-none">
+                            <h6 class="text-white fw-bold mb-2 small text-uppercase">Clustering Metrics</h6>
+                            <div class="d-flex justify-content-between text-secondary small mb-1">
+                                <span>Total Samples:</span>
+                                <span class="text-white fw-semibold" id="kSamplesCount">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-secondary small mb-1">
+                                <span>Inertia (WCSS):</span>
+                                <span class="text-white fw-semibold" id="kInertia">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-secondary small mb-1">
+                                <span>Silhouette Score:</span>
+                                <span class="text-white fw-semibold" id="kSilScore">--</span>
+                            </div>
+                            <div class="mt-2 pt-2 border-top border-secondary border-opacity-25">
+                                <div class="text-secondary small mb-1">Cluster Sizes:</div>
+                                <div id="kClusterSizesPills" class="d-flex gap-1 flex-wrap"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card bg-surface border-secondary border-opacity-25 h-100">
+                    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                        <h6 class="m-0 fw-bold text-white"><i class="bi bi-scatter-chart text-info me-2"></i>2D PCA Cluster Projection & Centroids</h6>
+                    </div>
+                    <div class="card-body p-4 text-center" id="kmeansVizArea">
+                        <div class="text-secondary py-5">
+                            <i class="bi bi-pie-chart fs-1 d-block mb-2"></i>
+                            <div>Select K and click <strong>Run K-Means Clustering</strong> to generate 2D PCA cluster visualization.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contingency Matrix & Academic Interpretation -->
+            <div class="col-12 d-none" id="kmeansContingencyArea">
+                <div class="card bg-surface border-secondary border-opacity-25">
+                    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                        <h6 class="m-0 fw-bold text-white"><i class="bi bi-table text-warning me-2"></i>Cluster vs Ground-Truth Contingency Matrix</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <p class="text-secondary small mb-3">
+                            This contingency table cross-references unsupervised geometric clusters against the ground-truth ISL sign labels to evaluate whether unguided clustering naturally isolated specific hand signs.
+                        </p>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-dark table-bordered align-middle m-0" id="contingencyTable">
+                                <!-- Populated dynamically -->
+                            </table>
+                        </div>
+                        <div class="alert alert-secondary bg-dark border-secondary border-opacity-50 text-light p-3 rounded-3 small" id="kmeansInterpretationText">
+                            <!-- Interpretation text -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBSECTION 7: EXPERIMENT HISTORY -->
+    <div class="tab-pane fade" id="pill-history" role="tabpanel">
+        <div class="card bg-surface border-secondary border-opacity-25">
+            <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 fw-bold text-white"><i class="bi bi-clock-history text-primary me-2"></i>Experiment History (MongoDB Atlas)</h6>
+                <button onclick="loadHistoryData()" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle m-0">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th class="ps-4">Timestamp</th>
+                                <th>Experiment / Algorithm</th>
+                                <th>Split Strategy</th>
+                                <th>Best Model</th>
+                                <th>Samples Evaluated</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-secondary">Loading experiment logs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MODEL_ID = "{{ model.id }}";
+
+// ---------------------------------------------------------------------
+// 1. Load EDA Data & Visualizations
+// ---------------------------------------------------------------------
+async function loadEDAData() {
+    const loading = document.getElementById('edaLoading');
+    const content = document.getElementById('edaContent');
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/eda`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to load EDA");
+
+        // Statistical summary table
+        const tbody = document.getElementById('edaStatsBody');
+        tbody.innerHTML = '';
+        const stats = data.statistical_summary || {};
+        for (const [key, s] of Object.entries(stats)) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="ps-4 fw-semibold text-white">${key.replace(/_/g, ' ').toUpperCase()}</td>
+                <td>${s.mean}</td>
+                <td>${s.median}</td>
+                <td>${s.std}</td>
+                <td>${s.min}</td>
+                <td>${s.max}</td>
+                <td>${s.q25}</td>
+                <td>${s.q75}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        // Render Matplotlib/Seaborn charts
+        const charts = data.charts || {};
+        if (charts.class_distribution) {
+            document.getElementById('chartClassDist').innerHTML = `<img src="${charts.class_distribution}" alt="Class Distribution">`;
+        }
+        if (charts.media_distribution) {
+            document.getElementById('chartMediaDist').innerHTML = `<img src="${charts.media_distribution}" alt="Media Distribution">`;
+        }
+        if (charts.participant_distribution) {
+            document.getElementById('chartPartDist').innerHTML = `<img src="${charts.participant_distribution}" alt="Participant Distribution">`;
+        }
+        if (charts.correlation_heatmap) {
+            document.getElementById('chartCorrHeatmap').innerHTML = `<img src="${charts.correlation_heatmap}" alt="Correlation Heatmap">`;
+        }
+        if (charts.feature_boxplot) {
+            document.getElementById('chartBoxplot').innerHTML = `<img src="${charts.feature_boxplot}" alt="Fingertip Variance">`;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (err) {
+        loading.innerHTML = `<div class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${err.message}</div>`;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 2. Training Pipeline Execution
+// ---------------------------------------------------------------------
+async function handleStartTraining(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnRunTraining');
+    const box = document.getElementById('trainStatusBox');
+    const msg = document.getElementById('trainStatusMsg');
+
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Training in Progress...`;
+    box.classList.remove('d-none');
+    msg.innerText = "Extracting canonical 63-D landmarks and running participant-independent hyperparameter tuning...";
+
+    const payload = {
+        knn: {},
+        svm: {},
+        dt: {},
+        include_cnn: document.getElementById('checkIncludeCNN').checked
+    };
+
+    const knnN = document.getElementById('knnNeighbors').value;
+    if (knnN !== 'Auto') payload.knn.n_neighbors = parseInt(knnN);
+    const knnW = document.getElementById('knnWeights').value;
+    if (knnW !== 'Auto') payload.knn.weights = knnW;
+    const knnM = document.getElementById('knnMetric').value;
+    if (knnM !== 'Auto') payload.knn.metric = knnM;
+
+    const svmC = document.getElementById('svmC').value;
+    if (svmC !== 'Auto') payload.svm.C = parseFloat(svmC);
+    const svmK = document.getElementById('svmKernel').value;
+    if (svmK !== 'Auto') payload.svm.kernel = svmK;
+    const svmG = document.getElementById('svmGamma').value;
+    if (svmG !== 'Auto') payload.svm.gamma = svmG;
+
+    const dtC = document.getElementById('dtCriterion').value;
+    if (dtC !== 'Auto') payload.dt.criterion = dtC;
+    const dtD = document.getElementById('dtDepth').value;
+    if (dtD !== 'Auto') payload.dt.max_depth = dtD === 'None' ? null : parseInt(dtD);
+    const dtS = document.getElementById('dtSplit').value;
+    if (dtS !== 'Auto') payload.dt.min_samples_split = parseInt(dtS);
+
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/train`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Training failed");
+
+        box.classList.add('d-none');
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-play-circle-fill me-1"></i>Start Comparative Training & Tuning`;
+
+        showToast(`Training complete! Best model: ${data.best_model.algorithm}`, 'success');
+
+        // Switch to comparison tab
+        const compTabTrigger = document.querySelector('#pill-comparison-tab');
+        const tab = new bootstrap.Tab(compTabTrigger);
+        tab.show();
+        loadComparisonData();
+    } catch (err) {
+        box.classList.remove('d-none');
+        box.innerHTML = `<div class="alert alert-danger bg-dark border-danger border-opacity-50 text-light"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>${err.message}</div>`;
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-play-circle-fill me-1"></i>Start Comparative Training & Tuning`;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 3. Load Model Comparison Data
+// ---------------------------------------------------------------------
+async function loadComparisonData() {
+    const container = document.getElementById('comparisonContainer');
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/comparison`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to load comparison data");
+
+        if (!data.has_results) {
+            container.innerHTML = `
+                <div class="card bg-surface border-secondary border-opacity-25 p-5 text-center">
+                    <i class="bi bi-trophy text-secondary fs-1 mb-2"></i>
+                    <h5 class="text-white fw-bold">No Comparison Data Available</h5>
+                    <p class="text-secondary small mb-3">${data.message}</p>
+                    <button onclick="document.querySelector('#pill-training-tab').click()" class="btn btn-primary btn-sm mx-auto">
+                        <i class="bi bi-play-circle-fill me-1"></i>Run Training Now
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const table = data.comparison_table || [];
+        const best = data.best_model || {};
+        const split = data.split_info || {};
+        const modelsDetail = data.models_detail || {};
+        const classNames = data.class_names || [];
+
+        let tableRows = '';
+        for (const row of table) {
+            const isWinner = best.algorithm === row.algorithm;
+            tableRows += `
+                <tr class="${isWinner ? 'table-primary bg-primary bg-opacity-10' : ''}">
+                    <td class="ps-4 fw-bold text-white d-flex align-items-center gap-2">
+                        ${isWinner ? '<span class="badge bg-warning text-dark"><i class="bi bi-trophy-fill"></i> BEST</span>' : ''}
+                        <span>${row.algorithm}</span>
+                    </td>
+                    <td class="fw-semibold ${(row.accuracy * 100) >= 80 ? 'text-success' : 'text-light'}">${(row.accuracy * 100).toFixed(1)}%</td>
+                    <td>${(row.precision_macro * 100).toFixed(1)}%</td>
+                    <td>${(row.recall_macro * 100).toFixed(1)}%</td>
+                    <td class="fw-bold text-info">${(row.f1_macro * 100).toFixed(1)}%</td>
+                    <td>${(row.f1_weighted * 100).toFixed(1)}%</td>
+                    <td>${row.roc_auc !== null ? (row.roc_auc * 100).toFixed(1) + '%' : '<span class="text-secondary small">N/A</span>'}</td>
+                    <td>${row.inference_time_ms ? row.inference_time_ms + ' ms' : '--'}</td>
+                    <td>${row.training_duration_s ? row.training_duration_s + ' s' : '--'}</td>
+                </tr>
+            `;
+        }
+
+        let splitWarningHtml = '';
+        if (split.warning) {
+            splitWarningHtml = `
+                <div class="alert alert-warning bg-dark border-warning border-opacity-50 text-light p-3 rounded-3 mb-4 small">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                    <strong>Participant Split Limitation:</strong> ${split.warning}
+                </div>
+            `;
+        } else if (split.participant_leakage_prevented) {
+            splitWarningHtml = `
+                <div class="alert alert-success bg-dark border-success border-opacity-50 text-light p-3 rounded-3 mb-4 small">
+                    <i class="bi bi-shield-check text-success me-2"></i>
+                    <strong>Participant Leakage Prevented:</strong> Test set strictly comprises held-out participant(s): <code>${split.test_participants.join(', ')}</code>.
+                </div>
+            `;
+        }
+
+        // Confusion Matrices HTML
+        let cmHtml = '';
+        for (const [algName, detail] of Object.entries(modelsDetail)) {
+            const m = detail.metrics || {};
+            const cm = m.confusion_matrix;
+            if (cm && cm.length > 0) {
+                let matrixRows = '';
+                for (let r = 0; r < cm.length; r++) {
+                    let cells = `<td class="text-secondary small fw-bold ps-3">${classNames[r] || 'C' + r}</td>`;
+                    for (let c = 0; c < cm[r].length; c++) {
+                        const val = cm[r][c];
+                        const isDiag = r === c;
+                        cells += `<td class="matrix-cell ${isDiag ? (val > 0 ? 'bg-success bg-opacity-25 text-success' : 'text-white') : (val > 0 ? 'bg-danger bg-opacity-25 text-danger' : 'text-secondary')}">${val}</td>`;
+                    }
+                    matrixRows += `<tr>${cells}</tr>`;
+                }
+
+                let colHeaders = '<th></th>';
+                for (let c = 0; c < cm[0].length; c++) {
+                    colHeaders += `<th class="text-center text-secondary small">${classNames[c] || 'C' + c}</th>`;
+                }
+
+                cmHtml += `
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 bg-dark rounded-3 border border-secondary border-opacity-25 h-100">
+                            <h6 class="text-white fw-bold mb-2">${algName} Confusion Matrix</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm m-0">
+                                    <thead><tr>${colHeaders}</tr></thead>
+                                    <tbody>${matrixRows}</tbody>
+                                </table>
+                            </div>
+                            <div class="text-secondary" style="font-size: 0.72rem; margin-top: 6px;">Rows: Actual Ground Truth &bull; Columns: Model Prediction</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        container.innerHTML = `
+            ${splitWarningHtml}
+            <div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+                <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-white"><i class="bi bi-table text-primary me-2"></i>Multi-Model Academic Performance Comparison</h6>
+                    <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50">
+                        <i class="bi bi-award-fill me-1"></i>Best Model: ${best.algorithm || 'None'}
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover align-middle m-0">
+                            <thead>
+                                <tr class="text-secondary small text-uppercase">
+                                    <th class="ps-4">Algorithm</th>
+                                    <th>Accuracy</th>
+                                    <th>Precision (Macro)</th>
+                                    <th>Recall (Macro)</th>
+                                    <th>F1-Score (Macro)</th>
+                                    <th>F1-Score (Weighted)</th>
+                                    <th>ROC-AUC (OvR)</th>
+                                    <th>Inference Latency</th>
+                                    <th>Training Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-surface border-secondary border-opacity-25 mb-4">
+                <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 py-3">
+                    <h6 class="m-0 fw-bold text-white"><i class="bi bi-grid-3x3 text-info me-2"></i>Model Confusion Matrices</h6>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        ${cmHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<div class="alert alert-danger bg-dark border-danger border-opacity-50 text-light"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>${err.message}</div>`;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 4. K-Means Clustering Execution
+// ---------------------------------------------------------------------
+async function handleRunKMeans(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnRunKMeans');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Clustering...`;
+
+    const k = parseInt(document.getElementById('kmeansKSlider').value);
+
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/cluster`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({n_clusters: k})
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Clustering failed");
+
+        // Metrics
+        document.getElementById('kmeansMetricsBox').classList.remove('d-none');
+        document.getElementById('kSamplesCount').innerText = data.total_samples;
+        document.getElementById('kInertia').innerText = data.inertia;
+        document.getElementById('kSilScore').innerText = data.silhouette_score !== null ? data.silhouette_score : 'N/A';
+
+        const pillsDiv = document.getElementById('kClusterSizesPills');
+        pillsDiv.innerHTML = '';
+        for (const [cName, count] of Object.entries(data.cluster_sizes || {})) {
+            pillsDiv.innerHTML += `<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25">${cName}: ${count}</span>`;
+        }
+
+        // 2D PCA Visualization
+        document.getElementById('kmeansVizArea').innerHTML = `
+            <img src="${data.chart_base64}" alt="K-Means PCA Plot" class="img-fluid rounded-3 shadow">
+            <div class="text-secondary small mt-2">Principal Component 1 & 2 capture ${data.pca_variance_explained.reduce((a, b) => a + b, 0).toFixed(1)}% of total variance across 63 landmark coordinates.</div>
+        `;
+
+        // Contingency Matrix
+        const contArea = document.getElementById('kmeansContingencyArea');
+        contArea.classList.remove('d-none');
+        const contTable = document.getElementById('contingencyTable');
+
+        let headers = '<th>Cluster</th>';
+        for (const cn of data.class_names || []) {
+            headers += `<th>${cn}</th>`;
+        }
+        headers += '<th>Total</th>';
+
+        let body = '';
+        for (const row of data.contingency_table || []) {
+            let rowCells = `<td class="fw-bold text-white ps-3">${row.cluster}</td>`;
+            for (const cn of data.class_names || []) {
+                rowCells += `<td class="text-center">${row[cn] || 0}</td>`;
+            }
+            rowCells += `<td class="text-center fw-bold text-info">${row.total}</td>`;
+            body += `<tr>${rowCells}</tr>`;
+        }
+        contTable.innerHTML = `<thead><tr class="text-secondary small text-uppercase">${headers}</tr></thead><tbody>${body}</tbody>`;
+
+        document.getElementById('kmeansInterpretationText').innerHTML = `
+            <strong><i class="bi bi-lightbulb-fill text-warning me-1"></i>Academic Interpretation:</strong> ${data.interpretation}
+        `;
+
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-pie-chart-fill me-1"></i>Run K-Means Clustering`;
+        showToast("K-Means clustering completed successfully!", "success");
+    } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-pie-chart-fill me-1"></i>Run K-Means Clustering`;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 5. Single-Sample Inference Tester
+// ---------------------------------------------------------------------
+async function handleSingleInference(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnTestInfer');
+    const resultBox = document.getElementById('inferResultBox');
+    const fileInput = document.getElementById('testImageFile');
+    const alg = document.getElementById('testAlgSelect').value;
+
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Running...`;
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    formData.append("algorithm", alg);
+
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/predict`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Inference failed");
+
+        resultBox.classList.remove('d-none');
+        document.getElementById('resAlgBadge').innerText = data.algorithm;
+
+        const statusBadge = document.getElementById('resStatusBadge');
+        if (data.status === 'HAND_DETECTED') {
+            statusBadge.className = 'badge bg-success';
+            statusBadge.innerText = 'HAND_DETECTED';
+            document.getElementById('resSignText').innerText = data.prediction.output_text;
+            document.getElementById('resConfText').innerText = `Confidence: ${(data.prediction.confidence * 100).toFixed(1)}%`;
+        } else {
+            statusBadge.className = 'badge bg-danger';
+            statusBadge.innerText = 'NO_HAND (Gated)';
+            document.getElementById('resSignText').innerText = 'NO HAND DETECTED';
+            document.getElementById('resConfText').innerText = 'Gated by MediaPipe Presence Gating';
+        }
+
+        document.getElementById('resTimeText').innerText = `${data.inference_time_ms} ms`;
+
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-search me-1"></i>Run Inference`;
+    } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-search me-1"></i>Run Inference`;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 6. Load History Data
+// ---------------------------------------------------------------------
+async function loadHistoryData() {
+    const tbody = document.getElementById('historyTableBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">Loading...</td></tr>';
+
+    try {
+        const res = await fetch(`/api/models/${MODEL_ID}/ml/experiments`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to load history");
+
+        const exps = data.experiments || [];
+        if (exps.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">No experiment history logged yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        for (const exp of exps) {
+            const tr = document.createElement('tr');
+            const created = exp.created_at ? exp.created_at.replace('T', ' ').slice(0, 19) : '--';
+            const best = exp.best_model ? exp.best_model.algorithm : (exp.algorithm || '--');
+            const strat = exp.split_info ? exp.split_info.strategy : 'N/A';
+            const count = exp.dataset_snapshot ? exp.dataset_snapshot.total_samples : (exp.metrics ? exp.metrics.total_samples : '--');
+
+            tr.innerHTML = `
+                <td class="ps-4 text-secondary small">${created}</td>
+                <td><span class="badge bg-secondary bg-opacity-25 text-light">${exp.algorithm}</span></td>
+                <td class="text-secondary small"><code>${strat}</code></td>
+                <td class="text-white fw-semibold">${best}</td>
+                <td class="text-info">${count}</td>
+                <td><span class="badge bg-success bg-opacity-25 text-success">COMPLETED</span></td>
+            `;
+            tbody.appendChild(tr);
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">${err.message}</td></tr>`;
+    }
+}
+</script>
+{% endblock %}

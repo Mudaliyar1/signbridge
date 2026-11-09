@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Models - SignBridge{% endblock %}
+{% block header_title %}Model Catalog{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="text-white fw-bold mb-1">Models & Architecture</h4>
+        <p class="text-secondary small m-0">Manage scratch-trained custom models, sign vocabularies, and dataset versions.</p>
+    </div>
+    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createModelModal">
+        <i class="bi bi-plus-lg"></i>
+        <span>Create Model</span>
+    </button>
+</div>
+
+{% if models|length == 0 %}
+<div class="card bg-surface border-secondary border-opacity-25 p-5 text-center">
+    <div class="p-3 bg-dark rounded-circle d-inline-block mx-auto mb-3 border border-secondary border-opacity-25">
+        <i class="bi bi-cpu text-secondary fs-1"></i>
+    </div>
+    <h5 class="text-white fw-bold mb-1">No models created yet.</h5>
+    <p class="text-secondary small mb-3">Initialize a custom sign recognition model to begin dataset collection and training.</p>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModelModal">
+            <i class="bi bi-plus-circle me-1"></i>Create First Model
+        </button>
+    </div>
+</div>
+{% else %}
+<div class="card bg-surface border-secondary border-opacity-25">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle m-0">
+            <thead class="border-bottom border-secondary border-opacity-25 text-secondary small text-uppercase">
+                <tr>
+                    <th class="ps-4">Model Name</th>
+                    <th>Version</th>
+                    <th>Architecture</th>
+                    <th>Status</th>
+                    <th>Classes</th>
+                    <th>Samples</th>
+                    <th>Training Runs</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in models %}
+                <tr id="model-row-{{ m.id }}">
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center gap-2">
+                            {% if m.is_active %}
+                            <span class="badge bg-success rounded-pill p-1" title="Active Model"><i class="bi bi-check-lg"></i></span>
+                            {% else %}
+                            <span class="badge bg-secondary bg-opacity-50 rounded-pill p-1"><i class="bi bi-dash"></i></span>
+                            {% endif %}
+                            <div>
+                                <a href="/admin/models/{{ m.id }}" class="text-white fw-semibold text-decoration-none hover-primary">{{ m.name }}</a>
+                                <small class="text-secondary d-block" style="font-size: 0.75rem;">{{ m.description or "No description" }}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge bg-dark border border-secondary border-opacity-50 text-light">v{{ m.version }}</span></td>
+                    <td><small class="text-secondary">{{ m.architecture }}</small></td>
+                    <td>
+                        {% if m.is_active %}
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25">ACTIVE</span>
+                        {% elif m.status == "Trained" %}
+                        <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25">TRAINED</span>
+                        {% else %}
+                        <span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25">{{ m.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="fw-semibold text-white">{{ m.classes_count }}</span></td>
+                    <td><span class="fw-semibold text-white">{{ m.samples_count }}</span></td>
+                    <td><span class="fw-semibold text-white">{{ m.training_runs_count }}</span></td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a href="/admin/models/{{ m.id }}" class="btn btn-outline-secondary" title="Open Workspace">
+                                <i class="bi bi-folder2-open me-1"></i>Open
+                            </a>
+                            {% if not m.is_active %}
+                            <button class="btn btn-outline-success" onclick="activateModel('{{ m.id }}', '{{ m.name }}')" title="Activate Model">
+                                <i class="bi bi-check2-circle"></i>
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-outline-danger" onclick="deleteModel('{{ m.id }}', '{{ m.name }}')" title="Delete Model">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal: Create Model -->
+<div class="modal fade" id="createModelModal" tabindex="-1" aria-labelledby="createModelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-surface border-secondary border-opacity-50">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title text-white fw-bold" id="createModelModalLabel">Create New Model</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="createModelForm" onsubmit="handleCreateModel(event)">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Model Name</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="modelName" placeholder="e.g. Sign Recognition V1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Version</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="modelVersion" value="1.0.0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Architecture</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="modelArch" value="Custom CNN" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Input Resolution</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="modelRes" value="224x224" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Description</label>
+                        <textarea class="form-control bg-dark border-secondary border-opacity-50 text-white" id="modelDesc" rows="2" placeholder="Primary static sign classifier"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveModelBtn">Create Model</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function handleCreateModel(e) {
+    e.preventDefault();
+    const btn = document.getElementById('saveModelBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+
+    const payload = {
+        name: document.getElementById('modelName').value.trim(),
+        version: document.getElementById('modelVersion').value.trim(),
+        description: document.getElementById('modelDesc').value.trim(),
+        architecture: document.getElementById('modelArch').value.trim(),
+        input_type: "RGB image",
+        input_resolution: document.getElementById('modelRes').value.trim()
+    };
+
+    try {
+        const res = await fetch('/api/models', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to create model');
+
+        showToast(`Model '${data.name}' created successfully!`, 'success');
+        setTimeout(() => {
+            window.location.href = `/admin/models/${data.id}`;
+        }, 500);
+    } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = 'Create Model';
+    }
+}
+
+async function activateModel(modelId, modelName) {
+    try {
+        const res = await fetch(`/api/models/${modelId}/activate`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to activate model');
+        showToast(data.message, 'success');
+        setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteModel(modelId, modelName) {
+    if (!confirm(`Are you sure you want to delete model '${modelName}'? All associated sign classes, samples, and physical media files will be deleted.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/models/${modelId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to delete model');
+        
+        showToast(data.message, 'success');
+        const row = document.getElementById(`model-row-${modelId}`);
+        if (row) row.remove();
+        setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

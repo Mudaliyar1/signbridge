@@ -1,0 +1,78 @@
+# ==============================================================================
+# SignBridge - Comprehensive Git Ignore
+# ==============================================================================
+
+# --- Secrets and Environment Configurations ---
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# --- Python Bytecode & Runtime Caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage Artifacts ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# --- IDEs, Text Editors, & System Files ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# --- Runtime Temporary Files & Logs ---
+*.log
+temp_*.mp4
+temp_*.jpg
+temp_*.png
+temp_*.jpeg
+
+# --- Runtime Dataset Storage (Cloudinary is primary media store) ---
+storage/datasets/*
+!storage/datasets/.gitkeep
+storage/temp/*
+storage/uploads/*

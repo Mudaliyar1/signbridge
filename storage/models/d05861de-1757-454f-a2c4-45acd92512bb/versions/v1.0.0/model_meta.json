@@ -1,0 +1,35 @@
+{
+  "model_id": "d05861de-1757-454f-a2c4-45acd92512bb",
+  "version": "v1.0.0",
+  "architecture": "CustomSignCNN",
+  "preprocessing_version": "hand_landmark_v1",
+  "input_resolution": "224x224",
+  "hand_roi_configured": true,
+  "roi_coordinates": [
+    0.45,
+    0.32,
+    0.95,
+    0.68
+  ],
+  "num_classes": 2,
+  "class_names": [
+    "HELP",
+    "WATER"
+  ],
+  "class_mapping": {
+    "0": "HELP",
+    "1": "WATER"
+  },
+  "class_id_mapping": {
+    "0": "e4f875d3-4e10-48fb-b031-1d063697c3bf",
+    "1": "b42aa57a-2432-4b68-bc4b-c9971a313f94"
+  },
+  "output_text_mapping": {
+    "0": "Help",
+    "1": "Water"
+  },
+  "trained_samples_count": 8,
+  "final_train_acc": 33.33,
+  "final_val_acc": 0.0,
+  "trained_at": "2026-09-24T11:30:27.346016+00:00"
+}

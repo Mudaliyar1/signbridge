@@ -1,0 +1,249 @@
+{
+  "model_id": "d05861de-1757-454f-a2c4-45acd92512bb",
+  "version": "classical_v1.0.0",
+  "feature_version": "landmark_63_v1",
+  "feature_dimension": 63,
+  "class_names": [
+    "HELP",
+    "WATER"
+  ],
+  "split_info": {
+    "strategy": "participant_independent",
+    "participant_leakage_prevented": true,
+    "total_participants": 2,
+    "train_participants": [
+      "Participant 001"
+    ],
+    "test_participants": [
+      "Participant 002"
+    ],
+    "train_samples_count": 6,
+    "test_samples_count": 8,
+    "warning": null
+  },
+  "comparison_table": [
+    {
+      "algorithm": "KNN",
+      "accuracy": 1.0,
+      "precision_macro": 1.0,
+      "recall_macro": 1.0,
+      "f1_macro": 1.0,
+      "f1_weighted": 1.0,
+      "roc_auc": 1.0,
+      "inference_time_ms": 0.669,
+      "training_duration_s": 0.326
+    },
+    {
+      "algorithm": "SVM",
+      "accuracy": 1.0,
+      "precision_macro": 1.0,
+      "recall_macro": 1.0,
+      "f1_macro": 1.0,
+      "f1_weighted": 1.0,
+      "roc_auc": 1.0,
+      "inference_time_ms": 0.389,
+      "training_duration_s": 0.044
+    },
+    {
+      "algorithm": "Decision Tree",
+      "accuracy": 0.875,
+      "precision_macro": 0.9,
+      "recall_macro": 0.875,
+      "f1_macro": 0.873,
+      "f1_weighted": 0.873,
+      "roc_auc": 0.875,
+      "inference_time_ms": 0.056,
+      "training_duration_s": 0.063
+    }
+  ],
+  "best_model": {
+    "algorithm": "KNN",
+    "accuracy": 1.0,
+    "precision_macro": 1.0,
+    "recall_macro": 1.0,
+    "f1_macro": 1.0,
+    "f1_weighted": 1.0,
+    "roc_auc": 1.0,
+    "inference_time_ms": 0.669,
+    "training_duration_s": 0.326
+  },
+  "trained_at": 1794238624.4923866,
+  "models": {
+    "KNN": {
+      "path": "D:\\signbridge\\storage\\models\\d05861de-1757-454f-a2c4-45acd92512bb\\classical\\knn_model.joblib",
+      "hyperparameters": {
+        "metric": "euclidean",
+        "n_neighbors": 3,
+        "weights": "uniform"
+      },
+      "metrics": {
+        "accuracy": 1.0,
+        "precision_macro": 1.0,
+        "precision_weighted": 1.0,
+        "recall_macro": 1.0,
+        "recall_weighted": 1.0,
+        "f1_macro": 1.0,
+        "f1_weighted": 1.0,
+        "roc_auc": 1.0,
+        "roc_auc_explanation": "Binary ROC-AUC computed on class 1 probabilities.",
+        "confusion_matrix": [
+          [
+            4,
+            0
+          ],
+          [
+            0,
+            4
+          ]
+        ],
+        "classification_report": {
+          "HELP": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 4.0
+          },
+          "WATER": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 4.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 8.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 8.0
+          }
+        },
+        "inference_time_ms": 0.669,
+        "training_duration_s": 0.326
+      }
+    },
+    "SVM": {
+      "path": "D:\\signbridge\\storage\\models\\d05861de-1757-454f-a2c4-45acd92512bb\\classical\\svm_model.joblib",
+      "scaler_path": "D:\\signbridge\\storage\\models\\d05861de-1757-454f-a2c4-45acd92512bb\\classical\\svm_scaler.joblib",
+      "hyperparameters": {
+        "C": 1.0,
+        "gamma": "scale",
+        "kernel": "rbf"
+      },
+      "metrics": {
+        "accuracy": 1.0,
+        "precision_macro": 1.0,
+        "precision_weighted": 1.0,
+        "recall_macro": 1.0,
+        "recall_weighted": 1.0,
+        "f1_macro": 1.0,
+        "f1_weighted": 1.0,
+        "roc_auc": 1.0,
+        "roc_auc_explanation": "Binary ROC-AUC computed on class 1 probabilities.",
+        "confusion_matrix": [
+          [
+            4,
+            0
+          ],
+          [
+            0,
+            4
+          ]
+        ],
+        "classification_report": {
+          "HELP": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 4.0
+          },
+          "WATER": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 4.0
+          },
+          "accuracy": 1.0,
+          "macro avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 8.0
+          },
+          "weighted avg": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 8.0
+          }
+        },
+        "inference_time_ms": 0.389,
+        "training_duration_s": 0.044
+      }
+    },
+    "Decision Tree": {
+      "path": "D:\\signbridge\\storage\\models\\d05861de-1757-454f-a2c4-45acd92512bb\\classical\\dt_model.joblib",
+      "hyperparameters": {
+        "criterion": "gini",
+        "max_depth": 5,
+        "min_samples_leaf": 1,
+        "min_samples_split": 2
+      },
+      "metrics": {
+        "accuracy": 0.875,
+        "precision_macro": 0.9,
+        "precision_weighted": 0.9,
+        "recall_macro": 0.875,
+        "recall_weighted": 0.875,
+        "f1_macro": 0.873,
+        "f1_weighted": 0.873,
+        "roc_auc": 0.875,
+        "roc_auc_explanation": "Binary ROC-AUC computed on class 1 probabilities.",
+        "confusion_matrix": [
+          [
+            3,
+            1
+          ],
+          [
+            0,
+            4
+          ]
+        ],
+        "classification_report": {
+          "HELP": {
+            "precision": 1.0,
+            "recall": 0.75,
+            "f1-score": 0.8571428571428571,
+            "support": 4.0
+          },
+          "WATER": {
+            "precision": 0.8,
+            "recall": 1.0,
+            "f1-score": 0.8888888888888888,
+            "support": 4.0
+          },
+          "accuracy": 0.875,
+          "macro avg": {
+            "precision": 0.9,
+            "recall": 0.875,
+            "f1-score": 0.873015873015873,
+            "support": 8.0
+          },
+          "weighted avg": {
+            "precision": 0.9,
+            "recall": 0.875,
+            "f1-score": 0.873015873015873,
+            "support": 8.0
+          }
+        },
+        "inference_time_ms": 0.056,
+        "training_duration_s": 0.063
+      }
+    }
+  }
+}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Participants - SignBridge{% endblock %}
+{% block header_title %}Dataset Contributors (Participants){% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="text-white fw-bold mb-1">Participants & Consent Records</h4>
+        <p class="text-secondary small m-0">Track signers for participant-aware data splitting and ethical consent compliance.</p>
+    </div>
+    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createParticipantModal">
+        <i class="bi bi-person-plus-fill"></i>
+        <span>Register Participant</span>
+    </button>
+</div>
+
+{% if participants|length == 0 %}
+<div class="card bg-surface border-secondary border-opacity-25 p-5 text-center">
+    <div class="p-3 bg-dark rounded-circle d-inline-block mx-auto mb-3 border border-secondary border-opacity-25">
+        <i class="bi bi-people text-secondary fs-1"></i>
+    </div>
+    <h5 class="text-white fw-bold mb-1">No participants registered yet.</h5>
+    <p class="text-secondary small mb-3">Register your first participant (e.g. Participant 001) with explicit consent before collecting camera data.</p>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createParticipantModal">
+            <i class="bi bi-person-plus me-1"></i>Register Participant 001
+        </button>
+    </div>
+</div>
+{% else %}
+<div class="card bg-surface border-secondary border-opacity-25">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle m-0">
+            <thead class="border-bottom border-secondary border-opacity-25 text-secondary small text-uppercase">
+                <tr>
+                    <th class="ps-4">Participant ID</th>
+                    <th>Display Name</th>
+                    <th>Consent Status</th>
+                    <th>Dataset Samples</th>
+                    <th>Notes</th>
+                    <th>Registered Date</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in participants %}
+                <tr id="participant-row-{{ p.participant_id }}">
+                    <td class="ps-4">
+                        <span class="badge bg-dark border border-secondary border-opacity-50 text-white fw-bold font-monospace px-2 py-1">
+                            {{ p.participant_id }}
+                        </span>
+                    </td>
+                    <td><strong class="text-white">{{ p.display_name }}</strong></td>
+                    <td>
+                        {% if p.consent_status == 'GRANTED' %}
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25">CONSENT GRANTED</span>
+                        {% elif p.consent_status == 'PENDING' %}
+                        <span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25">PENDING</span>
+                        {% else %}
+                        <span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25">REVOKED</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="fw-semibold text-white">{{ p.samples_count }}</span>
+                        <small class="text-secondary ms-1">samples</small>
+                    </td>
+                    <td><small class="text-secondary">{{ p.notes or "&mdash;" }}</small></td>
+                    <td><small class="text-secondary">{{ p.created_at.strftime('%Y-%m-%d') if p.created_at else 'N/A' }}</small></td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteParticipant('{{ p.participant_id }}')" title="Delete Participant">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal: Register Participant -->
+<div class="modal fade" id="createParticipantModal" tabindex="-1" aria-labelledby="createParticipantModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-surface border-secondary border-opacity-50">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title text-white fw-bold" id="createParticipantModalLabel">Register Participant</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="createParticipantForm" onsubmit="handleCreateParticipant(event)">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Participant Identifier</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white font-monospace" id="participantId" placeholder="e.g. Participant 001" value="Participant {{ '%03d'|format(participants|length + 1) }}" required>
+                        <small class="text-secondary" style="font-size: 0.72rem;">Anonymized identifier tracked throughout dataset collection and splits.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Display / Reference Name</label>
+                        <input type="text" class="form-control bg-dark border-secondary border-opacity-50 text-white" id="participantName" placeholder="e.g. Contributor A" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Consent Status</label>
+                        <select class="form-select bg-dark border-secondary border-opacity-50 text-white" id="participantConsent">
+                            <option value="GRANTED" selected>Consent Granted (Authorized for training dataset)</option>
+                            <option value="PENDING">Pending Review</option>
+                            <option value="REVOKED">Revoked (Excluded from training)</option>
+                        </select>
+                        <small class="text-secondary" style="font-size: 0.72rem;">Ethical requirement: Dataset samples require confirmed signer consent.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small fw-semibold">Notes (Optional)</label>
+                        <textarea class="form-control bg-dark border-secondary border-opacity-50 text-white" id="participantNotes" rows="2" placeholder="e.g. Native ISL signer, adult"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveParticipantBtn">Register Participant</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function handleCreateParticipant(e) {
+    e.preventDefault();
+    const btn = document.getElementById('saveParticipantBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+
+    const payload = {
+        participant_id: document.getElementById('participantId').value.trim(),
+        display_name: document.getElementById('participantName').value.trim(),
+        consent_status: document.getElementById('participantConsent').value,
+        notes: document.getElementById('participantNotes').value.trim()
+    };
+
+    try {
+        const res = await fetch('/api/participants', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to register participant');
+
+        showToast(`Registered '${data.participant_id}' successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = 'Register Participant';
+    }
+}
+
+async function deleteParticipant(participantId) {
+    if (!confirm(`Are you sure you want to delete '${participantId}'?`)) return;
+
+    try {
+        const res = await fetch(`/api/participants/${participantId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Delete failed');
+
+        showToast(data.message, 'success');
+        const row = document.getElementById(`participant-row-${participantId}`);
+        if (row) row.remove();
+        setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

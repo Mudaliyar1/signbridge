@@ -1,0 +1,1741 @@
+{% extends "base.html" %}
+
+{% block title %}Testing Studio - {{ model.name }}{% endblock %}
+{% block header_title %}Testing Studio &bull; {{ model.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .prediction-box {
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    .prediction-value {
+        font-size: 2.75rem;
+        font-weight: 800;
+        letter-spacing: -1px;
+    }
+    .video-viewport {
+        background: #000;
+        border-radius: 8px;
+        min-height: 380px;
+        max-height: 480px;
+        position: relative;
+        overflow: hidden;
+    }
+    .camera-overlay-badge {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 10;
+    }
+    .audio-wave-pulse {
+        animation: pulseWave 1.5s infinite;
+    }
+    @keyframes pulseWave {
+        0% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.8; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Model Status & Workspace Banner -->
+<div class="card bg-surface border-secondary border-opacity-25 mb-4 shadow-sm">
+    <div class="card-body p-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h4 class="fw-bold text-white m-0">{{ model.name }}</h4>
+                    <span class="badge bg-dark border border-secondary border-opacity-50 text-light">v{{ model.version }}</span>
+                    {% if availability.available %}
+                    <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-2 py-1">
+                        <i class="bi bi-check-circle-fill me-1"></i>READY FOR TESTING
+                    </span>
+                    {% else %}
+                    <span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25 px-2 py-1">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>NO TRAINED MODEL AVAILABLE
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="text-secondary small m-0">Inference Studio: Test image uploads, frame-based video evaluation, dataset metrics, and live camera with real-time speaker audio.</p>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <button id="btnTriggerTrainModal" class="btn btn-outline-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#trainModelModal">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Train / Re-Train Model</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs border-secondary border-opacity-25 mt-4">
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}"><i class="bi bi-info-circle me-1"></i>Overview</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/classes"><i class="bi bi-tag me-1"></i>Sign Classes ({{ classes_count }})</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/dataset"><i class="bi bi-collection-play me-1"></i>Dataset ({{ samples_count }})</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/capture"><i class="bi bi-camera me-1"></i>Capture</a></li>
+            <li class="nav-item"><a class="nav-link active text-white fw-semibold bg-dark border-secondary border-opacity-25 border-bottom-0" href="/admin/models/{{ model.id }}/testing"><i class="bi bi-speedometer2 me-1"></i>Testing Studio</a></li>
+            <li class="nav-item"><a class="nav-link text-secondary" href="/admin/models/{{ model.id }}/ml-analysis"><i class="bi bi-bar-chart-line-fill me-1 text-primary"></i>ML Analysis</a></li>
+        </ul>
+    </div>
+</div>
+
+<!-- Availability Banner if Un-trained or Retrain Required -->
+{% if not availability.available %}
+    {% if availability.retrain_required %}
+    <div class="alert alert-danger bg-dark border-danger border-opacity-50 text-light p-4 mb-4 rounded-3 shadow-sm">
+        <div class="d-flex align-items-start gap-3">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-3 mt-1"></i>
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h5 class="fw-bold text-danger m-0">RETRAIN REQUIRED — HAND LANDMARK PIPELINE UPDATE</h5>
+                    <span class="badge bg-danger">v1 HAND-LANDMARKS</span>
+                </div>
+                <p class="mb-2 text-secondary">
+                    The existing trained model checkpoint was produced with outdated or fixed ROI input preprocessing.
+                    To guarantee <strong>Hand &amp; Finger Focused Recognition</strong> and avoid false positive predictions on faces, inference is locked until the model is retrained with the MediaPipe Hand Landmark Preprocessing (<span class="text-info font-monospace">hand_landmark_v1</span>).
+                </p>
+                <div class="d-flex align-items-center gap-2 mt-3">
+                    <button class="btn btn-danger text-white fw-bold btn-sm" data-bs-toggle="modal" data-bs-target="#trainModelModal">
+                        <i class="bi bi-lightning-charge-fill me-1"></i>Retrain Model Now
+                    </button>
+                    <a href="/admin/models/{{ model.id }}/dataset" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-collection-play me-1"></i>Review Dataset Samples
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning bg-dark border-warning border-opacity-50 text-light p-4 mb-4 rounded-3 shadow-sm">
+        <div class="d-flex align-items-start gap-3">
+            <i class="bi bi-exclamation-octagon-fill text-warning fs-3 mt-1"></i>
+            <div class="flex-grow-1">
+                <h5 class="fw-bold text-warning mb-1">NO TRAINED MODEL AVAILABLE</h5>
+                <p class="mb-2 text-secondary">
+                    This model does not currently have a trained PyTorch checkpoint. Per system architecture, <strong>zero pretrained models or dummy simulations are permitted</strong>.
+                    Collect dataset samples and train the model before running inference.
+                </p>
+                <div class="d-flex align-items-center gap-2 mt-3">
+                    <button class="btn btn-warning text-dark fw-bold btn-sm" data-bs-toggle="modal" data-bs-target="#trainModelModal">
+                        <i class="bi bi-play-circle-fill me-1"></i>Train Model on Dataset
+                    </button>
+                    <a href="/admin/models/{{ model.id }}/capture" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-camera-video me-1"></i>Capture More Samples
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+<!-- Testing Studio Interface -->
+<div class="card bg-surface border-secondary border-opacity-25 shadow-sm">
+    <div class="card-header bg-transparent border-bottom border-secondary border-opacity-25 p-0">
+        <ul class="nav nav-tabs card-header-tabs m-0 border-0" id="testingStudioTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active text-white fw-semibold py-3 px-4 rounded-0 border-0" id="tab-image-btn" data-bs-toggle="tab" data-bs-target="#tab-image" type="button" role="tab">
+                    <i class="bi bi-image me-2 text-primary"></i>Image Test
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link text-secondary fw-semibold py-3 px-4 rounded-0 border-0" id="tab-video-btn" data-bs-toggle="tab" data-bs-target="#tab-video" type="button" role="tab">
+                    <i class="bi bi-film me-2 text-info"></i>Video Test
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link text-secondary fw-semibold py-3 px-4 rounded-0 border-0" id="tab-dataset-btn" data-bs-toggle="tab" data-bs-target="#tab-dataset" type="button" role="tab">
+                    <i class="bi bi-clipboard2-data me-2 text-success"></i>Dataset Evaluation
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link text-secondary fw-semibold py-3 px-4 rounded-0 border-0" id="tab-live-btn" data-bs-toggle="tab" data-bs-target="#tab-live" type="button" role="tab">
+                    <i class="bi bi-webcam me-2 text-danger"></i>Live Camera Studio
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link text-secondary fw-semibold py-3 px-4 rounded-0 border-0" id="tab-history-btn" data-bs-toggle="tab" data-bs-target="#tab-history" type="button" role="tab">
+                    <i class="bi bi-clock-history me-2 text-warning"></i>Test History
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card-body p-4">
+        <div class="tab-content" id="testingStudioTabContent">
+            
+            <!-- ============================================================== -->
+            <!-- TAB 1: IMAGE TEST -->
+            <!-- ============================================================== -->
+            <div class="tab-pane fade show active" id="tab-image" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 h-100">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-upload me-2 text-primary"></i>Select Test Image</h6>
+                            
+                            <!-- Source selector -->
+                            <div class="btn-group w-100 mb-3" role="group">
+                                <input type="radio" class="btn-check" name="imageSource" id="srcUploadImage" checked onchange="toggleImageSource('upload')">
+                                <label class="btn btn-outline-secondary btn-sm" for="srcUploadImage">Upload New Image</label>
+                                
+                                <input type="radio" class="btn-check" name="imageSource" id="srcDatasetImage" onchange="toggleImageSource('dataset')">
+                                <label class="btn btn-outline-secondary btn-sm" for="srcDatasetImage">Pick Labeled Dataset Sample</label>
+                            </div>
+
+                            <!-- Mode 1: File Upload -->
+                            <div id="imageUploadSection">
+                                <label class="form-label text-secondary small">Choose Image (JPG, PNG, WEBP)</label>
+                                <input type="file" id="testImageFile" class="form-control bg-surface border-secondary border-opacity-50 text-white mb-3" accept="image/*" onchange="previewUploadedImage(this)">
+                            </div>
+
+                            <!-- Mode 2: Dataset Dropdown -->
+                            <div id="imageDatasetSection" class="d-none">
+                                <label class="form-label text-secondary small">Select Sample from Dataset</label>
+                                <select id="datasetSampleSelect" class="form-select bg-surface border-secondary border-opacity-50 text-white mb-3" onchange="previewDatasetSample(this)">
+                                    <option value="">-- Choose Sample --</option>
+                                    {% for s in samples %}
+                                    {% if s.media_type == 'IMAGE' %}
+                                    <option value="{{ s.id }}" data-url="{{ s.media_url }}" data-label="{{ s.label }}" data-participant="{{ s.participant_id }}">
+                                        {{ s.label }} &bull; {{ s.participant_id }} ({{ s.created_at.strftime('%Y-%m-%d %H:%M') if s.created_at else '' }})
+                                    </option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Preview Box -->
+                            <div class="border border-secondary border-opacity-25 rounded-3 bg-black d-flex align-items-center justify-content-center p-2 mb-3" style="min-height: 260px; max-height: 320px; overflow: hidden;">
+                                <img id="imagePreviewImg" src="" alt="Preview" class="d-none img-fluid rounded" style="max-height: 280px; object-fit: contain;">
+                                <div id="imagePlaceholderText" class="text-secondary text-center p-4">
+                                    <i class="bi bi-image fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                                    <small>Upload an image or pick a dataset sample to preview</small>
+                                </div>
+                            </div>
+
+                            <button id="btnRunImageTest" class="btn btn-primary w-100 py-2 fw-semibold" onclick="executeImageTest()">
+                                <i class="bi bi-cpu-fill me-2"></i>Run PyTorch Inference
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 h-100 d-flex flex-column">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-graph-up me-2 text-success"></i>Inference Results</h6>
+                            
+                            <div id="imageResultContainer" class="flex-grow-1 d-flex flex-column justify-content-center">
+                                <div id="imageResultEmpty" class="text-center py-5 text-secondary">
+                                    <i class="bi bi-hourglass-split fs-2 d-block mb-2 opacity-50"></i>
+                                    <p class="m-0 small">Inference results will appear here after execution.</p>
+                                </div>
+
+                                <div id="imageResultData" class="d-none">
+                                    <!-- Expected vs Predicted Banner -->
+                                    <div id="expectedBanner" class="p-3 rounded-3 mb-3 bg-surface border border-secondary border-opacity-25 d-none">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div>
+                                                <small class="text-secondary text-uppercase d-block" style="font-size: 0.7rem;">Expected Label</small>
+                                                <h5 id="expectedLabelText" class="fw-bold text-white m-0">--</h5>
+                                            </div>
+                                            <div id="resultStatusBadge" class="badge px-3 py-2 fs-6">
+                                                CORRECT
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Main Predicted Sign Box -->
+                                    <div class="prediction-box bg-surface border border-primary border-opacity-25 p-4 text-center mb-3">
+                                        <small class="text-secondary text-uppercase fw-semibold mb-1" style="font-size: 0.75rem;">Recognized Sign</small>
+                                        <div id="predictedClassText" class="prediction-value text-primary">--</div>
+                                        <div id="predictedOutputText" class="text-info small fw-bold mt-1 d-none"></div>
+                                        <div class="d-flex align-items-center justify-content-center flex-wrap gap-2 mt-2">
+                                            <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25">
+                                                Confidence: <span id="confidencePercentText">0.0%</span>
+                                            </span>
+                                            <span class="badge bg-secondary bg-opacity-25 text-secondary">
+                                                Latency: <span id="latencyMsText">0 ms</span>
+                                            </span>
+                                            <span class="badge bg-dark border border-secondary border-opacity-50 text-secondary" title="Face excluded from model input">
+                                                <i class="bi bi-hand-index-thumb me-1 text-primary"></i>Hand ROI Applied
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Actual Model Input & Hand Gate Debug Box -->
+                                    <div class="card bg-black border-secondary border-opacity-50 p-2 mb-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-1">
+                                            <span class="small text-secondary fw-semibold" style="font-size: 0.72rem;">Actual Model Input (224x224 Hand Crop)</span>
+                                            <span id="imageHandPresenceBadge" class="badge bg-secondary" style="font-size: 0.65rem;">IDLE</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <img id="imageActualInputImg" src="" alt="Hand Crop" class="rounded border border-secondary border-opacity-50 d-none" style="width: 56px; height: 56px; object-fit: cover;">
+                                            <span id="imageActualInputPlaceholder" class="text-secondary small" style="font-size: 0.7rem;">Hand crop preview appears after inference</span>
+                                            <div class="flex-grow-1 small text-secondary" style="font-size: 0.7rem;" id="imageHandGateMetrics"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Top 3 Probability Breakdown -->
+                                    <h6 class="text-secondary small fw-semibold text-uppercase mb-2">Softmax Class Probabilities (Top-3)</h6>
+                                    <div id="topPredictionsBars" class="d-flex flex-column gap-2 mb-3">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+
+                                    <!-- Manual Speak Button -->
+                                    <div class="mt-auto pt-2">
+                                        <button class="btn btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2" onclick="speakCurrentPrediction()">
+                                            <i class="bi bi-volume-up-fill fs-5 text-primary"></i>
+                                            <span>Pronounce Prediction Through Speakers</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- TAB 2: VIDEO TEST (Clearly labeled Frame-Based) -->
+            <!-- ============================================================== -->
+            <div class="tab-pane fade" id="tab-video" role="tabpanel">
+                <div class="alert alert-info bg-dark border-info border-opacity-50 text-light p-3 mb-4 rounded-3">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-info-circle-fill text-info fs-5 mt-1"></i>
+                        <div>
+                            <strong class="text-white">Frame-Based Video Test (Static CustomSignCNN)</strong>
+                            <p class="small text-secondary m-0">
+                                This test samples individual frames from the video using OpenCV, runs inference through our scratch CustomSignCNN, and deterministically aggregates predictions using confidence-weighted voting. 
+                                <em>It is clearly labeled as frame-based inference and does not claim temporal sequence modeling.</em>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 h-100">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-camera-video me-2 text-info"></i>Video Source</h6>
+
+                            <div class="btn-group w-100 mb-3" role="group">
+                                <input type="radio" class="btn-check" name="videoSource" id="srcUploadVideo" checked onchange="toggleVideoSource('upload')">
+                                <label class="btn btn-outline-secondary btn-sm" for="srcUploadVideo">Upload Video</label>
+                                
+                                <input type="radio" class="btn-check" name="videoSource" id="srcDatasetVideo" onchange="toggleVideoSource('dataset')">
+                                <label class="btn btn-outline-secondary btn-sm" for="srcDatasetVideo">Pick Dataset Video</label>
+                            </div>
+
+                            <div id="videoUploadSection">
+                                <label class="form-label text-secondary small">Upload Video (MP4, WEBM)</label>
+                                <input type="file" id="testVideoFile" class="form-control bg-surface border-secondary border-opacity-50 text-white mb-3" accept="video/*" onchange="previewUploadedVideo(this)">
+                            </div>
+
+                            <div id="videoDatasetSection" class="d-none">
+                                <label class="form-label text-secondary small">Choose Labeled Video</label>
+                                <select id="datasetVideoSelect" class="form-select bg-surface border-secondary border-opacity-50 text-white mb-3" onchange="previewDatasetVideo(this)">
+                                    <option value="">-- Choose Video Sample --</option>
+                                    {% for s in samples %}
+                                    {% if s.media_type == 'VIDEO' %}
+                                    <option value="{{ s.id }}" data-url="{{ s.media_url }}" data-label="{{ s.label }}">
+                                        {{ s.label }} &bull; {{ s.participant_id }} ({{ s.duration }}s)
+                                    </option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Video Preview Player -->
+                            <div class="video-viewport mb-3 d-flex align-items-center justify-content-center">
+                                <video id="testVideoPlayer" controls class="d-none w-100 h-100 object-fit-contain"></video>
+                                <div id="videoPlaceholder" class="text-center text-secondary p-4">
+                                    <i class="bi bi-film fs-1 d-block mb-2 opacity-50"></i>
+                                    <small>Select a video to preview</small>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small">Sampling Rate</label>
+                                <select id="videoSampleFps" class="form-select form-select-sm bg-surface border-secondary text-white">
+                                    <option value="1.0">1 frame per second</option>
+                                    <option value="2.0" selected>2 frames per second (Recommended)</option>
+                                    <option value="4.0">4 frames per second (Thorough)</option>
+                                </select>
+                            </div>
+
+                            <button id="btnRunVideoTest" class="btn btn-info text-dark fw-bold w-100 py-2" onclick="executeVideoTest()">
+                                <i class="bi bi-play-fill me-1"></i>Run Frame-Based Test
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 h-100 d-flex flex-column">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-card-checklist me-2 text-info"></i>Analysis & Aggregation</h6>
+                            
+                            <div id="videoResultContainer" class="flex-grow-1">
+                                <div id="videoResultEmpty" class="text-center py-5 text-secondary">
+                                    <i class="bi bi-clock fs-2 d-block mb-2 opacity-50"></i>
+                                    <small>Run video inference to view frame breakdown and voting results.</small>
+                                </div>
+
+                                <div id="videoResultData" class="d-none">
+                                    <!-- Aggregated Final Prediction Box -->
+                                    <div class="prediction-box bg-surface border border-info border-opacity-50 p-3 text-center mb-3">
+                                        <small class="text-secondary text-uppercase fw-semibold mb-1" style="font-size: 0.75rem;">Aggregated Prediction (Confidence-Weighted)</small>
+                                        <div id="videoFinalPredictedText" class="prediction-value text-info">--</div>
+                                        <div id="videoFinalOutputText" class="text-info small fw-bold mt-1 d-none"></div>
+                                        <div class="d-flex align-items-center justify-content-center flex-wrap gap-2 mt-2">
+                                            <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25">
+                                                Aggregated Conf: <span id="videoFinalConfText">0.0%</span>
+                                            </span>
+                                            <span class="badge bg-secondary bg-opacity-25 text-secondary">
+                                                Frames Analyzed: <span id="videoFramesAnalyzedText">0</span>
+                                            </span>
+                                            <span class="badge bg-dark border border-secondary border-opacity-50 text-secondary" title="Face excluded from model input">
+                                                <i class="bi bi-hand-index-thumb me-1 text-info"></i>Hand ROI
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Frame by Frame Table -->
+                                    <h6 class="text-secondary small fw-semibold text-uppercase mb-2">Frame-by-Frame Breakdown</h6>
+                                    <div class="table-responsive border border-secondary border-opacity-25 rounded-3 mb-3" style="max-height: 240px; overflow-y: auto;">
+                                        <table class="table table-dark table-sm table-hover m-0 align-middle">
+                                            <thead class="text-secondary small">
+                                                <tr>
+                                                    <th>Frame #</th>
+                                                    <th>Timestamp</th>
+                                                    <th>Predicted Sign</th>
+                                                    <th>Confidence</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="videoFramesTableBody">
+                                                <!-- Dynamic rows -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <button class="btn btn-outline-light btn-sm w-100" onclick="speakCurrentVideoPrediction()">
+                                        <i class="bi bi-volume-up-fill text-info me-1"></i>Speak Aggregated Result
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- TAB 3: DATASET EVALUATION -->
+            <!-- ============================================================== -->
+            <div class="tab-pane fade" id="tab-dataset" role="tabpanel">
+                <div class="card bg-dark border-secondary border-opacity-25 p-3 mb-4">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label text-secondary small">Dataset Split</label>
+                            <select id="evalSplitSelect" class="form-select bg-surface border-secondary text-white">
+                                <option value="ALL">All Dataset Samples</option>
+                                <option value="TRAIN">TRAIN Split</option>
+                                <option value="VALIDATION">VALIDATION Split</option>
+                                <option value="TEST" selected>TEST Split</option>
+                            </select>
+                            <small class="text-secondary" style="font-size: 0.7rem;">Participant-aware splitting</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label text-secondary small">Sign Class Filter</label>
+                            <select id="evalClassSelect" class="form-select bg-surface border-secondary text-white">
+                                <option value="">All Sign Classes</option>
+                                {% for c in classes %}
+                                <option value="{{ c.id }}">{{ c.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label text-secondary small">Participant Filter</label>
+                            <select id="evalParticipantSelect" class="form-select bg-surface border-secondary text-white">
+                                <option value="">All Participants</option>
+                                {% for p in participants %}
+                                <option value="{{ p.participant_id }}">{{ p.participant_id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button id="btnRunEval" class="btn btn-success w-100 fw-semibold" onclick="executeDatasetEvaluation()">
+                                <i class="bi bi-calculator me-1"></i>Run Evaluation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real Metrics Summary Cards -->
+                <div id="evalMetricsCards" class="row g-3 mb-4 d-none">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 text-center">
+                            <small class="text-secondary text-uppercase fw-semibold" style="font-size: 0.75rem;">Accuracy</small>
+                            <h2 id="evalAccuracyText" class="fw-bold text-success m-0">0.0%</h2>
+                            <small id="evalCorrectRatioText" class="text-secondary">0 / 0 correct</small>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 text-center">
+                            <small class="text-secondary text-uppercase fw-semibold" style="font-size: 0.75rem;">Macro Precision</small>
+                            <h2 id="evalPrecisionText" class="fw-bold text-white m-0">0.0%</h2>
+                            <small class="text-secondary">Unweighted class avg</small>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 text-center">
+                            <small class="text-secondary text-uppercase fw-semibold" style="font-size: 0.75rem;">Macro Recall</small>
+                            <h2 id="evalRecallText" class="fw-bold text-white m-0">0.0%</h2>
+                            <small class="text-secondary">Sensitivity</small>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 text-center">
+                            <small class="text-secondary text-uppercase fw-semibold" style="font-size: 0.75rem;">Macro F1 Score</small>
+                            <h2 id="evalF1Text" class="fw-bold text-white m-0">0.0%</h2>
+                            <small class="text-secondary">Harmonic mean</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Per-Class & Confusion Matrix Row -->
+                <div id="evalDetailedTables" class="row g-4 d-none">
+                    <div class="col-lg-6">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-table me-2 text-primary"></i>Per-Class Performance</h6>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm table-hover align-middle m-0">
+                                    <thead class="text-secondary small">
+                                        <tr>
+                                            <th>Class</th>
+                                            <th>Samples</th>
+                                            <th>Accuracy</th>
+                                            <th>Precision</th>
+                                            <th>Recall</th>
+                                            <th>F1</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="evalPerClassBody">
+                                        <!-- Dynamic -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card bg-surface border-secondary border-opacity-25 p-3 h-100">
+                            <h6 class="text-white fw-bold mb-3"><i class="bi bi-grid-3x3 me-2 text-info"></i>Confusion Matrix</h6>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-bordered table-sm text-center align-middle m-0" id="evalConfusionMatrixTable">
+                                    <!-- Dynamic Matrix -->
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="evalEmptyState" class="text-center py-5 text-secondary">
+                    <i class="bi bi-clipboard2-check fs-1 d-block mb-2 opacity-50"></i>
+                    <p class="m-0">Click "Run Evaluation" to calculate real metrics on labeled dataset samples.</p>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- TAB 4: LIVE CAMERA TESTING STUDIO WITH TEXT-TO-SPEECH -->
+            <!-- ============================================================== -->
+            <div class="tab-pane fade" id="tab-live" role="tabpanel">
+                <div class="row g-4">
+                    <!-- Left: Camera Viewport -->
+                    <div class="col-lg-7">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 shadow-sm">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-webcam-fill text-danger fs-5"></i>
+                                    <h6 class="m-0 text-white fw-bold">Live Camera Feed</h6>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="form-check form-switch m-0 d-flex align-items-center gap-1">
+                                        <input class="form-check-input" type="checkbox" id="liveToggleLandmarks" checked onchange="toggleLiveLandmarks(this.checked)">
+                                        <label class="form-check-label text-secondary small" for="liveToggleLandmarks">Landmarks</label>
+                                    </div>
+                                    <select id="liveCameraSelector" class="form-select form-select-sm bg-surface border-secondary text-white w-auto" style="max-width: 170px;">
+                                        <option value="">Default Camera</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Video Element Container -->
+                            <div class="video-viewport d-flex align-items-center justify-content-center mb-3 position-relative" style="min-height: 420px;">
+                                <span id="liveStatusOverlay" class="badge bg-secondary camera-overlay-badge">
+                                    Camera Off
+                                </span>
+                                <span id="liveHandStatsBadge" class="badge bg-dark border border-secondary border-opacity-50 text-info small position-absolute top-0 end-0 m-3 d-none" style="z-index: 15;">
+                                    <i class="bi bi-hand-index-thumb me-1"></i><span id="liveHandStatsText">Hand: --</span>
+                                </span>
+                                <video id="liveStreamVideo" autoplay playsinline muted class="w-100 h-100 object-fit-contain d-none"></video>
+                                <canvas id="liveTrackingCanvas" class="position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 10;"></canvas>
+                                <canvas id="liveCaptureCanvas" class="d-none"></canvas>
+
+                                <div id="liveOffPlaceholder" class="text-center text-secondary p-5">
+                                    <i class="bi bi-camera-video-off fs-1 d-block mb-2 opacity-50"></i>
+                                    <p class="m-0">Camera stream is stopped.</p>
+                                    <small class="text-secondary">Click "Start Live Testing" to begin real-time sign recognition with automatic hand localization.</small>
+                                </div>
+                            </div>
+
+                            <!-- Camera Start/Stop Controls -->
+                            <div class="d-flex gap-2">
+                                <button id="btnStartLiveCamera" class="btn btn-primary flex-grow-1 py-2 fw-semibold" onclick="startLiveCamera()">
+                                    <i class="bi bi-play-circle-fill me-2"></i>Start Live Testing
+                                </button>
+                                <button id="btnStopLiveCamera" class="btn btn-danger py-2 fw-semibold d-none" onclick="stopLiveCamera()">
+                                    <i class="bi bi-stop-circle-fill me-2"></i>Stop Camera
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Prediction & Text-To-Speech Output -->
+                    <div class="col-lg-5">
+                        <div class="card bg-dark border-secondary border-opacity-25 p-3 shadow-sm h-100 d-flex flex-column">
+                            <h6 class="text-white fw-bold mb-3 d-flex align-items-center justify-content-between">
+                                <span><i class="bi bi-soundwave me-2 text-primary"></i>Live Speech & Recognition</span>
+                                <span id="ttsAudioIndicator" class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 d-none audio-wave-pulse">
+                                    <i class="bi bi-volume-up-fill me-1"></i>VOICE ON
+                                </span>
+                            </h6>
+
+                            <!-- Real-Time Stabilized Prediction Display -->
+                            <div class="prediction-box bg-surface border border-secondary border-opacity-50 p-3 text-center mb-3">
+                                <small class="text-secondary text-uppercase fw-semibold mb-1" style="font-size: 0.75rem;">Live Prediction</small>
+                                <div id="livePredictedClass" class="prediction-value text-white">IDLE</div>
+                                <div id="liveOutputTextDisplay" class="text-info small fw-bold mt-1" style="min-height: 1.2rem;"></div>
+                                
+                                <div id="liveConfidenceContainer" class="d-flex align-items-center justify-content-center gap-2 mt-1">
+                                    <span class="badge bg-secondary bg-opacity-50 text-light">
+                                        Confidence: <span id="liveConfidenceText">--%</span>
+                                    </span>
+                                    <span id="stabilizationBadge" class="badge bg-dark border border-secondary border-opacity-50 text-secondary">
+                                        Waiting for sign...
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Hand Gate & Actual Model Input (224x224) Live Preview -->
+                            <div class="card bg-black border-secondary border-opacity-50 p-2 mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <span class="small text-secondary fw-semibold" style="font-size: 0.72rem;">Actual Model Input (224x224 Hand Crop)</span>
+                                    <span id="liveHandPresenceBadge" class="badge bg-secondary" style="font-size: 0.65rem;">IDLE</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img id="liveActualInputImg" src="" alt="Hand Crop" class="rounded border border-secondary border-opacity-50 d-none" style="width: 56px; height: 56px; object-fit: cover;">
+                                    <span id="liveActualInputPlaceholder" class="text-secondary small" style="font-size: 0.7rem;">Hand crop preview appears during live inference</span>
+                                    <div class="flex-grow-1 small text-secondary" style="font-size: 0.7rem;" id="liveHandGateMetrics"></div>
+                                </div>
+                            </div>
+
+                            <!-- Manual Speak Action -->
+                            <div class="mb-3">
+                                <button class="btn btn-outline-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-semibold" onclick="speakCurrentLivePrediction()">
+                                    <i class="bi bi-megaphone-fill fs-5"></i>
+                                    <span>🔊 Speak Recognized Sign</span>
+                                </button>
+                            </div>
+
+                            <!-- Confidence Threshold & Stabilization Configuration -->
+                            <div class="card bg-surface border-secondary border-opacity-25 p-3 mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <label class="form-label small text-secondary fw-semibold m-0">Confidence Threshold</label>
+                                    <span class="text-primary small fw-bold" id="thresholdValueLabel">70%</span>
+                                </div>
+                                <input type="range" class="form-range" min="40" max="95" value="70" id="confThresholdSlider" oninput="document.getElementById('thresholdValueLabel').innerText = this.value + '%'">
+                                <small class="text-secondary" style="font-size: 0.72rem;">Predictions below this threshold will report "UNCERTAIN" to avoid false positives.</small>
+                            </div>
+
+                            <!-- Text-To-Speech Settings -->
+                            <div class="card bg-surface border-secondary border-opacity-25 p-3 mt-auto">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-white fw-semibold">Auto-Voice Speaker Output</span>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="ttsVoiceToggle" checked>
+                                    </div>
+                                </div>
+                                <div class="row g-2 pt-1">
+                                    <div class="col-6">
+                                        <label class="form-label text-secondary small mb-1">Speech Rate: <span id="rateVal">1.0</span>x</label>
+                                        <input type="range" class="form-range" min="0.6" max="1.6" step="0.1" value="1.0" id="ttsRateSlider" oninput="document.getElementById('rateVal').innerText = this.value">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label text-secondary small mb-1">Cooldown: <span id="cooldownVal">3.0</span>s</label>
+                                        <input type="range" class="form-range" min="1.0" max="6.0" step="0.5" value="3.0" id="ttsCooldownSlider" oninput="document.getElementById('cooldownVal').innerText = this.value">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- TAB 5: TEST HISTORY -->
+            <!-- ============================================================== -->
+            <div class="tab-pane fade" id="tab-history" role="tabpanel">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="text-white fw-bold m-0"><i class="bi bi-clock-history me-2 text-warning"></i>Recent Test Log</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadTestHistory()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </div>
+
+                <div class="table-responsive border border-secondary border-opacity-25 rounded-3">
+                    <table class="table table-dark table-hover align-middle m-0">
+                        <thead class="text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-3">Timestamp</th>
+                                <th>Test Type</th>
+                                <th>Expected</th>
+                                <th>Predicted</th>
+                                <th>Confidence</th>
+                                <th>Result</th>
+                                <th class="pe-3">Latency</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testHistoryTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-secondary">Loading history...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- MODEL TRAINING MODAL (Scratch-built PyTorch Training Runner) -->
+<!-- ====================================================================== -->
+<div class="modal fade" id="trainModelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-surface border-secondary border-opacity-50 text-light">
+            <div class="modal-header border-secondary border-opacity-25">
+                <h5 class="modal-title fw-bold text-white">
+                    <i class="bi bi-lightning-charge-fill text-warning me-2"></i>Train CustomSignCNN
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-secondary mb-3">
+                    Trains the scratch-built <code>CustomSignCNN</code> architecture on all valid images and video keyframes collected for this model.
+                    Zero pretrained weights will be loaded.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Training Epochs</label>
+                    <input type="number" id="trainEpochsInput" class="form-control bg-dark border-secondary text-white" value="12" min="1" max="50">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Batch Size</label>
+                    <input type="number" id="trainBatchSizeInput" class="form-control bg-dark border-secondary text-white" value="8" min="2" max="64">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Learning Rate</label>
+                    <input type="number" id="trainLrInput" class="form-control bg-dark border-secondary text-white" value="0.001" step="0.0005">
+                </div>
+
+                <!-- Training Progress Area -->
+                <div id="trainingProgressArea" class="d-none p-3 bg-dark rounded-3 border border-secondary border-opacity-25 mb-3">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+                        <span id="trainingStatusText" class="small text-white fw-semibold">Training in progress...</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div id="trainingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary border-opacity-25">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button id="btnStartTrainingExecution" type="button" class="btn btn-warning text-dark fw-bold btn-sm" onclick="executeModelTraining()">
+                    <i class="bi bi-play-circle-fill me-1"></i>Start Training
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const MODEL_ID = "{{ model.id }}";
+    let activeStream = null;
+    let liveInferenceTimer = null;
+    let isInferencing = false;
+    
+    // Prediction stabilization state
+    const STABILIZATION_BUFFER_SIZE = 3;
+    let predictionHistory = [];
+    let lastSpokenSign = null;
+    let lastSpokenTime = 0;
+
+    // -------------------------------------------------------------
+    // Image Test Functions
+    // -------------------------------------------------------------
+    function toggleImageSource(mode) {
+        if (mode === 'upload') {
+            document.getElementById('imageUploadSection').classList.remove('d-none');
+            document.getElementById('imageDatasetSection').classList.add('d-none');
+        } else {
+            document.getElementById('imageUploadSection').classList.add('d-none');
+            document.getElementById('imageDatasetSection').classList.remove('d-none');
+        }
+    }
+
+    function previewUploadedImage(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('imagePreviewImg');
+                img.src = e.target.result;
+                img.classList.remove('d-none');
+                document.getElementById('imagePlaceholderText').classList.add('d-none');
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function previewDatasetSample(select) {
+        const option = select.options[select.selectedIndex];
+        const url = option.getAttribute('data-url');
+        const img = document.getElementById('imagePreviewImg');
+        if (url) {
+            img.src = url;
+            img.classList.remove('d-none');
+            document.getElementById('imagePlaceholderText').classList.add('d-none');
+        } else {
+            img.classList.add('d-none');
+            document.getElementById('imagePlaceholderText').classList.remove('d-none');
+        }
+    }
+
+    async function executeImageTest() {
+        const isUpload = document.getElementById('srcUploadImage').checked;
+        const formData = new FormData();
+
+        if (isUpload) {
+            const fileInput = document.getElementById('testImageFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("Please select an image file to upload first.");
+                return;
+            }
+            formData.append('file', fileInput.files[0]);
+        } else {
+            const select = document.getElementById('datasetSampleSelect');
+            if (!select.value) {
+                alert("Please select a sample from the dataset dropdown.");
+                return;
+            }
+            formData.append('sample_id', select.value);
+        }
+
+        const btn = document.getElementById('btnRunImageTest');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Running PyTorch Inference...`;
+
+        try {
+            const resp = await fetch(`/api/models/${MODEL_ID}/testing/image`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                alert(data.detail || "Image testing failed.");
+                return;
+            }
+
+            renderImageResult(data);
+        } catch (err) {
+            alert("Network or server error running inference: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-cpu-fill me-2"></i>Run PyTorch Inference`;
+        }
+    }
+
+    function renderImageResult(data) {
+        window.currentImageResult = data;
+        document.getElementById('imageResultEmpty').classList.add('d-none');
+        document.getElementById('imageResultData').classList.remove('d-none');
+
+        // Update Actual Model Input Debug Box
+        const actualImg = document.getElementById('imageActualInputImg');
+        const placeholder = document.getElementById('imageActualInputPlaceholder');
+        const gateBadge = document.getElementById('imageHandPresenceBadge');
+        const metricsEl = document.getElementById('imageHandGateMetrics');
+
+        if (data.actual_model_input_base64) {
+            actualImg.src = 'data:image/jpeg;base64,' + data.actual_model_input_base64;
+            actualImg.classList.remove('d-none');
+            placeholder.classList.add('d-none');
+        } else {
+            actualImg.classList.add('d-none');
+            placeholder.classList.remove('d-none');
+        }
+
+        const occ = data.metrics?.occupancy_ratio !== undefined ? (data.metrics.occupancy_ratio * 100).toFixed(1) + '%' : 'N/A';
+        metricsEl.innerText = `Occupancy: ${occ} • Preprocessing: hand_roi_v2`;
+
+        // Expected vs Predicted
+        const expectedBanner = document.getElementById('expectedBanner');
+        if (data.expected && data.expected.class_name) {
+            expectedBanner.classList.remove('d-none');
+            document.getElementById('expectedLabelText').innerText = data.expected.class_name;
+            const badge = document.getElementById('resultStatusBadge');
+            badge.innerText = data.result_label || (data.is_correct ? "CORRECT" : "INCORRECT");
+            badge.className = data.is_correct ? "badge px-3 py-2 fs-6 bg-success" : "badge px-3 py-2 fs-6 bg-danger";
+        } else {
+            expectedBanner.classList.add('d-none');
+        }
+
+        const pred = data.prediction;
+        const outEl = document.getElementById('predictedOutputText');
+
+        if (data.status === 'NO_HAND' || !data.hand_present || !pred) {
+            gateBadge.innerText = "NO HAND DETECTED";
+            gateBadge.className = "badge bg-danger";
+
+            document.getElementById('predictedClassText').innerText = "NO HAND DETECTED";
+            document.getElementById('predictedClassText').className = "prediction-value text-warning";
+            outEl.innerText = "Face/background excluded. Place hand inside calibrated box to recognize signs.";
+            outEl.classList.remove('d-none');
+
+            document.getElementById('confidencePercentText').innerText = "0.0%";
+            document.getElementById('latencyMsText').innerText = (data.inference_time_ms || 0) + " ms";
+
+            const container = document.getElementById('topPredictionsBars');
+            container.innerHTML = `<div class="alert alert-dark border-secondary border-opacity-50 text-secondary p-2 small m-0"><i class="bi bi-shield-slash me-1 text-warning"></i>Hand Gate intercepted input: No hand present inside the designated signing zone. CNN inference bypassed.</div>`;
+            return;
+        }
+
+        // Hand is present
+        gateBadge.innerText = "HAND CONFIRMED";
+        gateBadge.className = "badge bg-success";
+
+        document.getElementById('predictedClassText').innerText = pred.class_name;
+        document.getElementById('predictedClassText').className = "prediction-value text-primary";
+        if (pred.output_text) {
+            outEl.innerText = `Spoken Meaning: "${pred.output_text}"`;
+            outEl.classList.remove('d-none');
+        } else {
+            outEl.classList.add('d-none');
+        }
+        document.getElementById('confidencePercentText').innerText = (pred.confidence * 100).toFixed(2) + "%";
+        document.getElementById('latencyMsText').innerText = data.inference_time_ms + " ms";
+
+        // Top 3 Bars
+        const container = document.getElementById('topPredictionsBars');
+        container.innerHTML = "";
+        (data.top_predictions || []).forEach((item, idx) => {
+            const pct = (item.confidence * 100).toFixed(2);
+            const color = idx === 0 ? "bg-primary" : "bg-secondary";
+            const outTxt = item.output_text ? ` (${item.output_text})` : '';
+            container.innerHTML += `
+                <div>
+                    <div class="d-flex justify-content-between small text-light mb-1">
+                        <span><strong>${idx + 1}. ${item.class_name}${outTxt}</strong></span>
+                        <span>${pct}%</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar ${color}" style="width: ${pct}%;"></div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function speakCurrentPrediction() {
+        const pred = window.currentImageResult?.prediction;
+        const text = pred?.output_text || document.getElementById('predictedClassText').innerText;
+        speakPredictionText(text);
+    }
+
+    // -------------------------------------------------------------
+    // Video Test Functions
+    // -------------------------------------------------------------
+    function toggleVideoSource(mode) {
+        if (mode === 'upload') {
+            document.getElementById('videoUploadSection').classList.remove('d-none');
+            document.getElementById('videoDatasetSection').classList.add('d-none');
+        } else {
+            document.getElementById('videoUploadSection').classList.add('d-none');
+            document.getElementById('videoDatasetSection').classList.remove('d-none');
+        }
+    }
+
+    function previewUploadedVideo(input) {
+        if (input.files && input.files[0]) {
+            const player = document.getElementById('testVideoPlayer');
+            player.src = URL.createObjectURL(input.files[0]);
+            player.classList.remove('d-none');
+            document.getElementById('videoPlaceholder').classList.add('d-none');
+        }
+    }
+
+    function previewDatasetVideo(select) {
+        const option = select.options[select.selectedIndex];
+        const url = option.getAttribute('data-url');
+        const player = document.getElementById('testVideoPlayer');
+        if (url) {
+            player.src = url;
+            player.classList.remove('d-none');
+            document.getElementById('videoPlaceholder').classList.add('d-none');
+        } else {
+            player.classList.add('d-none');
+            document.getElementById('videoPlaceholder').classList.remove('d-none');
+        }
+    }
+
+    async function executeVideoTest() {
+        const isUpload = document.getElementById('srcUploadVideo').checked;
+        const formData = new FormData();
+        formData.append('sample_fps', document.getElementById('videoSampleFps').value);
+
+        if (isUpload) {
+            const fileInput = document.getElementById('testVideoFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("Please select a video file to upload first.");
+                return;
+            }
+            formData.append('file', fileInput.files[0]);
+        } else {
+            const select = document.getElementById('datasetVideoSelect');
+            if (!select.value) {
+                alert("Please select a video sample from the dataset dropdown.");
+                return;
+            }
+            formData.append('sample_id', select.value);
+        }
+
+        const btn = document.getElementById('btnRunVideoTest');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Extracting & Analyzing Frames...`;
+
+        try {
+            const resp = await fetch(`/api/models/${MODEL_ID}/testing/video`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                alert(data.detail || "Video testing failed.");
+                return;
+            }
+
+            renderVideoResult(data);
+        } catch (err) {
+            alert("Error running video test: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-play-fill me-1"></i>Run Frame-Based Test`;
+        }
+    }
+
+    function renderVideoResult(data) {
+        window.currentVideoResult = data;
+        document.getElementById('videoResultEmpty').classList.add('d-none');
+        document.getElementById('videoResultData').classList.remove('d-none');
+
+        const finalPred = data.final_prediction;
+        document.getElementById('videoFinalPredictedText').innerText = finalPred.class_name;
+        const outEl = document.getElementById('videoFinalOutputText');
+        if (finalPred.output_text) {
+            outEl.innerText = `Spoken Meaning: "${finalPred.output_text}"`;
+            outEl.classList.remove('d-none');
+        } else {
+            outEl.classList.add('d-none');
+        }
+        document.getElementById('videoFinalConfText').innerText = (finalPred.confidence * 100).toFixed(2) + "%";
+        document.getElementById('videoFramesAnalyzedText').innerText = data.total_frames_analyzed;
+
+        const tbody = document.getElementById('videoFramesTableBody');
+        tbody.innerHTML = "";
+        data.frame_predictions.forEach(f => {
+            const outBadge = f.output_text ? `<span class="badge bg-info bg-opacity-25 text-info ms-1">${f.output_text}</span>` : '';
+            tbody.innerHTML += `
+                <tr>
+                    <td class="text-secondary ps-2">#${f.frame_index}</td>
+                    <td>${f.timestamp_sec}s</td>
+                    <td class="text-white fw-semibold">${f.class_name} ${outBadge}</td>
+                    <td><span class="badge bg-secondary bg-opacity-25 text-light">${(f.confidence * 100).toFixed(1)}%</span></td>
+                </tr>
+            `;
+        });
+    }
+
+    function speakCurrentVideoPrediction() {
+        const pred = window.currentVideoResult?.final_prediction;
+        const text = pred?.output_text || document.getElementById('videoFinalPredictedText').innerText;
+        speakPredictionText(text);
+    }
+
+    // -------------------------------------------------------------
+    // Dataset Evaluation Functions
+    // -------------------------------------------------------------
+    async function executeDatasetEvaluation() {
+        const split = document.getElementById('evalSplitSelect').value;
+        const classId = document.getElementById('evalClassSelect').value;
+        const participantId = document.getElementById('evalParticipantSelect').value;
+
+        const params = new URLSearchParams();
+        if (split) params.append('split', split);
+        if (classId) params.append('class_id', classId);
+        if (participantId) params.append('participant_id', participantId);
+
+        const btn = document.getElementById('btnRunEval');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Evaluating...`;
+
+        try {
+            const resp = await fetch(`/api/models/${MODEL_ID}/testing/evaluate?${params.toString()}`, {
+                method: 'POST'
+            });
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                alert(data.detail || "Evaluation failed.");
+                return;
+            }
+
+            renderEvaluationMetrics(data);
+        } catch (err) {
+            alert("Error executing evaluation: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-calculator me-1"></i>Run Evaluation`;
+        }
+    }
+
+    function renderEvaluationMetrics(data) {
+        document.getElementById('evalEmptyState').classList.add('d-none');
+        document.getElementById('evalMetricsCards').classList.remove('d-none');
+        document.getElementById('evalDetailedTables').classList.remove('d-none');
+
+        if (data.total_samples === 0) {
+            alert(data.message || "No matching samples found for evaluation.");
+            return;
+        }
+
+        document.getElementById('evalAccuracyText').innerText = (data.accuracy || 0).toFixed(1) + "%";
+        document.getElementById('evalCorrectRatioText').innerText = `${data.correct_predictions} / ${data.total_samples} correct`;
+        document.getElementById('evalPrecisionText').innerText = (data.macro_precision || 0).toFixed(1) + "%";
+        document.getElementById('evalRecallText').innerText = (data.macro_recall || 0).toFixed(1) + "%";
+        document.getElementById('evalF1Text').innerText = (data.macro_f1 || 0).toFixed(1) + "%";
+
+        // Per Class Table
+        const pcBody = document.getElementById('evalPerClassBody');
+        pcBody.innerHTML = "";
+        for (const [cname, metrics] of Object.entries(data.per_class || {})) {
+            pcBody.innerHTML += `
+                <tr>
+                    <td class="text-white fw-bold">${cname}</td>
+                    <td>${metrics.total_samples}</td>
+                    <td class="text-success">${metrics.accuracy}%</td>
+                    <td>${metrics.precision}%</td>
+                    <td>${metrics.recall}%</td>
+                    <td class="text-primary fw-semibold">${metrics.f1_score}%</td>
+                </tr>
+            `;
+        }
+
+        // Confusion Matrix
+        const cmTable = document.getElementById('evalConfusionMatrixTable');
+        const cm = data.confusion_matrix;
+        if (cm && cm.labels) {
+            let header = `<thead><tr><th class="text-secondary small">Actual \\ Pred</th>`;
+            cm.labels.forEach(l => header += `<th class="text-info">${l}</th>`);
+            header += `</tr></thead>`;
+
+            let body = `<tbody>`;
+            cm.labels.forEach((actLabel, rowIdx) => {
+                body += `<tr><td class="text-white fw-semibold">${actLabel}</td>`;
+                cm.labels.forEach((predLabel, colIdx) => {
+                    const count = cm.matrix[rowIdx][colIdx];
+                    const isDiag = (rowIdx === colIdx);
+                    const bg = isDiag ? (count > 0 ? "bg-success bg-opacity-25 text-success fw-bold" : "") : (count > 0 ? "bg-danger bg-opacity-25 text-danger" : "text-secondary");
+                    body += `<td class="${bg}">${count}</td>`;
+                });
+                body += `</tr>`;
+            });
+            body += `</tbody>`;
+            cmTable.innerHTML = header + body;
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Live Camera Testing & Text-To-Speech
+    // -------------------------------------------------------------
+    async function initCameraDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const selector = document.getElementById('liveCameraSelector');
+            selector.innerHTML = "";
+            let idx = 1;
+            devices.forEach(d => {
+                if (d.kind === 'videoinput') {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `Camera ${idx++}`;
+                    selector.appendChild(opt);
+                }
+            });
+            if (selector.options.length === 0) {
+                selector.innerHTML = '<option value="">Default Camera</option>';
+            }
+        } catch (e) {
+            console.error("Camera device enumerate error:", e);
+        }
+    }
+
+    let liveHandsTracker = null;
+    let liveShowLandmarks = true;
+    let latestHandDetection = null;
+
+    function toggleLiveLandmarks(show) {
+        liveShowLandmarks = show;
+    }
+
+    // MediaPipe Hand Connection Pairs
+    const HAND_CONNECTIONS = [
+        [0,1],[1,2],[2,3],[3,4],
+        [0,5],[5,6],[6,7],[7,8],
+        [5,9],[9,10],[10,11],[11,12],
+        [9,13],[13,14],[14,15],[15,16],
+        [13,17],[17,18],[18,19],[19,20],
+        [0,17]
+    ];
+
+    function initLiveMediaPipe() {
+        if (typeof Hands === 'undefined') {
+            console.warn("MediaPipe Hands JS not loaded; client-side landmark overlay disabled.");
+            return;
+        }
+        try {
+            liveHandsTracker = new Hands({
+                locateFile: (file) => `/static/vendor/mediapipe/${file}`
+            });
+            liveHandsTracker.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            liveHandsTracker.onResults(onLiveHandResults);
+        } catch (e) {
+            console.error("Live MediaPipe init error:", e);
+        }
+    }
+
+    function onLiveHandResults(results) {
+        const canvas = document.getElementById('liveTrackingCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('liveStreamVideo');
+
+        if (video && video.videoWidth > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        } else {
+            canvas.width = 640;
+            canvas.height = 480;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const badge = document.getElementById('liveHandStatsBadge');
+        const text = document.getElementById('liveHandStatsText');
+
+        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+            latestHandDetection = null;
+            if (badge) badge.classList.add('d-none');
+            return;
+        }
+
+        if (badge) badge.classList.remove('d-none');
+
+        // Pick primary hand
+        let primaryIdx = 0;
+        let maxArea = 0;
+
+        results.multiHandLandmarks.forEach((landmarks, idx) => {
+            let minX = 1, maxX = 0, minY = 1, maxY = 0;
+            landmarks.forEach(pt => {
+                minX = Math.min(minX, pt.x);
+                maxX = Math.max(maxX, pt.x);
+                minY = Math.min(minY, pt.y);
+                maxY = Math.max(maxY, pt.y);
+            });
+            const area = (maxX - minX) * (maxY - minY);
+            if (area > maxArea) {
+                maxArea = area;
+                primaryIdx = idx;
+            }
+        });
+
+        const primaryLandmarks = results.multiHandLandmarks[primaryIdx];
+        const handedness = (results.multiHandedness && results.multiHandedness[primaryIdx]) 
+            ? results.multiHandedness[primaryIdx].label : "Hand";
+        const score = (results.multiHandedness && results.multiHandedness[primaryIdx])
+            ? Math.round(results.multiHandedness[primaryIdx].score * 100) : 95;
+
+        if (text) text.innerText = `${handedness} Hand (${score}%)`;
+
+        // Calculate dynamic bounding box
+        let minX = 1, maxX = 0, minY = 1, maxY = 0;
+        primaryLandmarks.forEach(pt => {
+            minX = Math.min(minX, pt.x);
+            maxX = Math.max(maxX, pt.x);
+            minY = Math.min(minY, pt.y);
+            maxY = Math.max(maxY, pt.y);
+        });
+
+        const padX = (maxX - minX) * 0.22;
+        const padY = (maxY - minY) * 0.22;
+        const bx = Math.max(0, (minX - padX) * canvas.width);
+        const by = Math.max(0, (minY - padY) * canvas.height);
+        const bw = Math.min(canvas.width - bx, (maxX - minX + padX * 2) * canvas.width);
+        const bh = Math.min(canvas.height - by, (maxY - minY + padY * 2) * canvas.height);
+
+        latestHandDetection = {
+            handedness: handedness,
+            confidence: score / 100.0,
+            bbox: [bx, by, bw, bh],
+            landmarks: primaryLandmarks
+        };
+
+        // Draw dynamic bounding box around hand
+        ctx.strokeStyle = '#00d2ff';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.setLineDash([]);
+
+        // Label tag
+        ctx.fillStyle = '#00d2ff';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        const labelStr = `✋ ${handedness} Hand (${score}%)`;
+        const tw = ctx.measureText(labelStr).width;
+        ctx.fillRect(bx, Math.max(0, by - 22), tw + 12, 22);
+        ctx.fillStyle = '#000';
+        ctx.fillText(labelStr, bx + 6, Math.max(14, by - 6));
+
+        // Draw 21 landmarks skeleton if enabled
+        if (liveShowLandmarks) {
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.75)';
+            ctx.lineWidth = 2;
+            HAND_CONNECTIONS.forEach(([i, j]) => {
+                const p1 = primaryLandmarks[i];
+                const p2 = primaryLandmarks[j];
+                ctx.beginPath();
+                ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
+                ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
+                ctx.stroke();
+            });
+
+            primaryLandmarks.forEach((pt, idx) => {
+                ctx.beginPath();
+                ctx.arc(pt.x * canvas.width, pt.y * canvas.height, idx === 0 ? 5 : 3.5, 0, 2 * Math.PI);
+                ctx.fillStyle = idx === 0 ? '#ff0055' : (idx % 4 === 0 ? '#00ffff' : '#00ff88');
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+        }
+    }
+
+    async function startLiveCamera() {
+        try {
+            const selector = document.getElementById('liveCameraSelector');
+            const deviceId = selector ? selector.value : "";
+            
+            let constraints = {
+                video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                                : { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            };
+
+            try {
+                activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (constraintErr) {
+                console.warn("Retrying with simple video constraints:", constraintErr);
+                activeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
+
+            const video = document.getElementById('liveStreamVideo');
+            video.srcObject = activeStream;
+            video.classList.remove('d-none');
+            document.getElementById('liveOffPlaceholder').classList.add('d-none');
+
+            try {
+                await video.play();
+            } catch (playErr) {
+                console.warn("Video play triggered:", playErr);
+            }
+
+            document.getElementById('btnStartLiveCamera').classList.add('d-none');
+            document.getElementById('btnStopLiveCamera').classList.remove('d-none');
+            document.getElementById('liveStatusOverlay').className = "badge bg-success camera-overlay-badge";
+            document.getElementById('liveStatusOverlay').innerText = "LIVE INFERENCE";
+
+            initLiveMediaPipe();
+            await initCameraDevices();
+            startLiveInferenceLoop();
+        } catch (err) {
+            console.error("Camera access error:", err);
+            let msg = err.message;
+            if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                msg = "Your webcam is currently in use by another application. Please release the camera and try again.";
+            } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                msg = "Camera permission was blocked. Please allow camera permissions in your browser.";
+            }
+            alert("Camera Access Notice: " + msg);
+        }
+    }
+
+    function stopLiveCamera() {
+        if (liveInferenceTimer) {
+            clearInterval(liveInferenceTimer);
+            liveInferenceTimer = null;
+        }
+        if (activeStream) {
+            activeStream.getTracks().forEach(t => t.stop());
+            activeStream = null;
+        }
+
+        const video = document.getElementById('liveStreamVideo');
+        video.srcObject = null;
+        video.classList.add('d-none');
+        document.getElementById('liveOffPlaceholder').classList.remove('d-none');
+
+        const canvas = document.getElementById('liveTrackingCanvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        document.getElementById('btnStartLiveCamera').classList.remove('d-none');
+        document.getElementById('btnStopLiveCamera').classList.add('d-none');
+        document.getElementById('liveStatusOverlay').className = "badge bg-secondary camera-overlay-badge";
+        document.getElementById('liveStatusOverlay').innerText = "Camera Off";
+        document.getElementById('liveHandStatsBadge')?.classList.add('d-none');
+
+        currentLivePrediction = null;
+        latestHandDetection = null;
+        document.getElementById('livePredictedClass').innerText = "IDLE";
+        document.getElementById('livePredictedClass').className = "prediction-value text-white";
+        document.getElementById('liveOutputTextDisplay').innerText = "";
+        document.getElementById('liveConfidenceText').innerText = "--%";
+        document.getElementById('stabilizationBadge').innerText = "Waiting for camera...";
+    }
+
+    function startLiveInferenceLoop() {
+        const intervalMs = 300;
+        liveInferenceTimer = setInterval(captureAndInferLiveFrame, intervalMs);
+    }
+
+    async function captureAndInferLiveFrame() {
+        if (isInferencing || !activeStream) return;
+        const video = document.getElementById('liveStreamVideo');
+        if (video.readyState < 2) return;
+
+        // Process client-side hand tracking frame
+        if (liveHandsTracker) {
+            try {
+                await liveHandsTracker.send({ image: video });
+            } catch (e) {
+                // Tracking frame error ignore
+            }
+        }
+
+        isInferencing = true;
+        try {
+            const canvas = document.getElementById('liveCaptureCanvas');
+            canvas.width = 320;
+            canvas.height = 240;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const base64Data = canvas.toDataURL('image/jpeg', 0.85);
+
+            const formData = new FormData();
+            formData.append('frame_base64', base64Data);
+
+            const resp = await fetch(`/api/models/${MODEL_ID}/testing/live-frame`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await resp.json();
+
+            if (!data.success) {
+                if (data.retrain_required) {
+                    document.getElementById('livePredictedClass').innerText = "RETRAIN REQUIRED";
+                    document.getElementById('livePredictedClass').className = "prediction-value text-danger";
+                    document.getElementById('liveOutputTextDisplay').innerText = "Model must be retrained with hand_landmark_v1";
+                    document.getElementById('stabilizationBadge').innerText = "RETRAIN REQUIRED";
+                    document.getElementById('stabilizationBadge').className = "badge bg-danger";
+                }
+                return;
+            }
+
+            processLivePrediction(data);
+        } catch (e) {
+            console.error("Live frame inference error:", e);
+        } finally {
+            isInferencing = false;
+        }
+    }
+
+    let currentLivePrediction = null;
+
+    function processLivePrediction(data) {
+        const actualImg = document.getElementById('liveActualInputImg');
+        const placeholder = document.getElementById('liveActualInputPlaceholder');
+        const gateBadge = document.getElementById('liveHandPresenceBadge');
+        const metricsEl = document.getElementById('liveHandGateMetrics');
+
+        if (data.actual_model_input_base64) {
+            actualImg.src = 'data:image/jpeg;base64,' + data.actual_model_input_base64;
+            actualImg.classList.remove('d-none');
+            placeholder.classList.add('d-none');
+        } else {
+            actualImg.classList.add('d-none');
+            placeholder.classList.remove('d-none');
+        }
+
+        const occ = data.metrics?.occupancy_ratio !== undefined ? (data.metrics.occupancy_ratio * 100).toFixed(1) + '%' : 'N/A';
+        if (metricsEl) metricsEl.innerText = `Occupancy: ${occ} • Preprocessing: hand_landmark_v1`;
+
+        // 1. Check Hand Presence Gate
+        if (data.status === 'NO_HAND' || !data.hand_present || !data.prediction) {
+            currentLivePrediction = null;
+            predictionHistory = [];
+
+            if (gateBadge) {
+                gateBadge.innerText = "NO HAND DETECTED";
+                gateBadge.className = "badge bg-danger";
+            }
+
+            document.getElementById('livePredictedClass').innerText = "NO HAND DETECTED";
+            document.getElementById('livePredictedClass').className = "prediction-value text-warning";
+            document.getElementById('liveOutputTextDisplay').innerText = "Show your hand & fingers to the camera";
+            document.getElementById('liveConfidenceText').innerText = "--%";
+            document.getElementById('stabilizationBadge').innerText = "NO HAND";
+            document.getElementById('stabilizationBadge').className = "badge bg-dark border border-secondary border-opacity-50 text-secondary";
+            return;
+        }
+
+        // 2. Hand is confirmed present
+        if (gateBadge) {
+            gateBadge.innerText = "HAND CONFIRMED";
+            gateBadge.className = "badge bg-success";
+        }
+
+        const pred = data.prediction;
+        currentLivePrediction = pred;
+        const threshold = parseFloat(document.getElementById('confThresholdSlider').value) / 100.0;
+        const rawClass = pred.class_name;
+        const outputText = pred.output_text || rawClass;
+        const conf = pred.confidence;
+
+        document.getElementById('liveConfidenceText').innerText = (conf * 100).toFixed(1) + "%";
+
+        // Push to sliding buffer
+        predictionHistory.push({ class_name: rawClass, output_text: outputText, confidence: conf });
+        if (predictionHistory.length > STABILIZATION_BUFFER_SIZE) {
+            predictionHistory.shift();
+        }
+
+        // Check if confidence is below threshold
+        if (conf < threshold) {
+            document.getElementById('livePredictedClass').innerText = "UNCERTAIN";
+            document.getElementById('livePredictedClass').className = "prediction-value text-warning";
+            document.getElementById('liveOutputTextDisplay').innerText = "";
+            document.getElementById('stabilizationBadge').innerText = "Confidence below threshold";
+            document.getElementById('stabilizationBadge').className = "badge bg-warning bg-opacity-25 text-warning";
+            return;
+        }
+
+        // Check consistency across sliding buffer
+        const isConsistent = predictionHistory.every(p => p.class_name === rawClass && p.confidence >= threshold);
+
+        if (isConsistent && predictionHistory.length >= STABILIZATION_BUFFER_SIZE) {
+            // CONFIRMED STABLE PREDICTION
+            document.getElementById('livePredictedClass').innerText = rawClass;
+            document.getElementById('livePredictedClass').className = "prediction-value text-primary";
+            document.getElementById('liveOutputTextDisplay').innerText = pred.output_text ? `"${pred.output_text}"` : "";
+            document.getElementById('stabilizationBadge').innerText = "CONFIRMED";
+            document.getElementById('stabilizationBadge').className = "badge bg-success";
+
+            // Trigger Text-to-Speech with human-readable output text
+            checkAndSpeakStableSign(outputText);
+        } else {
+            // TRANSITIONING
+            document.getElementById('livePredictedClass').innerText = rawClass + " ...";
+            document.getElementById('livePredictedClass').className = "prediction-value text-secondary";
+            document.getElementById('liveOutputTextDisplay').innerText = "";
+            document.getElementById('stabilizationBadge').innerText = "Stabilizing sign...";
+            document.getElementById('stabilizationBadge').className = "badge bg-secondary";
+        }
+    }
+
+    function checkAndSpeakStableSign(signName) {
+        const isTtsEnabled = document.getElementById('ttsVoiceToggle').checked;
+        if (!isTtsEnabled) return;
+
+        const cooldownSec = parseFloat(document.getElementById('ttsCooldownSlider').value);
+        const now = Date.now() / 1000.0;
+
+        if (signName === lastSpokenSign && (now - lastSpokenTime) < cooldownSec) {
+            return;
+        }
+
+        speakPredictionText(signName);
+        lastSpokenSign = signName;
+        lastSpokenTime = now;
+    }
+
+    function speakCurrentLivePrediction() {
+        const text = currentLivePrediction?.output_text || document.getElementById('livePredictedClass').innerText.replace("...", "").trim();
+        if (text && text !== "IDLE" && text !== "UNCERTAIN") {
+            speakPredictionText(text);
+        } else {
+            alert("No confirmed sign currently detected on camera.");
+        }
+    }
+
+    function speakPredictionText(rawText) {
+        if (!('speechSynthesis' in window)) {
+            alert("Web Speech API is not supported in this browser.");
+            return;
+        }
+
+        let cleanText = rawText;
+        if (cleanText.includes("_")) {
+            cleanText = cleanText.replace(/_/g, " ").toLowerCase();
+        }
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        
+        const rate = parseFloat(document.getElementById('ttsRateSlider').value) || 1.0;
+        utterance.rate = rate;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        const ind = document.getElementById('ttsAudioIndicator');
+        if (ind) ind.classList.remove('d-none');
+        
+        utterance.onend = () => {
+            if (ind) ind.classList.add('d-none');
+        };
+
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // -------------------------------------------------------------
+    // Test History
+    // -------------------------------------------------------------
+    async function loadTestHistory() {
+        try {
+            const resp = await fetch(`/api/models/${MODEL_ID}/testing/history`);
+            const data = await resp.json();
+            const tbody = document.getElementById('testHistoryTableBody');
+            tbody.innerHTML = "";
+
+            if (!data.results || data.results.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-secondary">No previous test records found for this model.</td></tr>`;
+                return;
+            }
+
+            data.results.forEach(r => {
+                const dateStr = new Date(r.created_at).toLocaleString();
+                const badge = r.is_correct === true ? `<span class="badge bg-success">CORRECT</span>` :
+                              (r.is_correct === false ? `<span class="badge bg-danger">INCORRECT</span>` : `<span class="badge bg-secondary">UNLABELED</span>`);
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="ps-3 text-secondary small">${dateStr}</td>
+                        <td><span class="badge bg-dark border border-secondary border-opacity-50 text-light">${r.test_type}</span></td>
+                        <td>${r.expected_class_name || '<em class="text-secondary">N/A</em>'}</td>
+                        <td class="text-white fw-semibold">${r.predicted_class_name}</td>
+                        <td>${(r.confidence * 100).toFixed(1)}%</td>
+                        <td>${badge}</td>
+                        <td class="pe-3 text-secondary small">${r.inference_time_ms} ms</td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            console.error("History load error:", e);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Model Training Trigger
+    // -------------------------------------------------------------
+    async function executeModelTraining() {
+        const epochs = parseInt(document.getElementById('trainEpochsInput').value) || 12;
+        const batchSize = parseInt(document.getElementById('trainBatchSizeInput').value) || 8;
+        const lr = parseFloat(document.getElementById('trainLrInput').value) || 0.001;
+
+        const btn = document.getElementById('btnStartTrainingExecution');
+        btn.disabled = true;
+        document.getElementById('trainingProgressArea').classList.remove('d-none');
+        document.getElementById('trainingStatusText').innerText = "Initializing scratch CustomSignCNN training with hand_landmark_v1...";
+
+        try {
+            const resp = await fetch(`/api/models/${MODEL_ID}/training/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ epochs: epochs, batch_size: batchSize, learning_rate: lr })
+            });
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                alert(data.detail || "Training failed.");
+                document.getElementById('trainingProgressArea').classList.add('d-none');
+                btn.disabled = false;
+                return;
+            }
+
+            document.getElementById('trainingStatusText').innerText = `Training Complete! Val Acc: ${data.final_val_accuracy}%`;
+            setTimeout(() => {
+                window.location.reload();
+            }, 1200);
+        } catch (e) {
+            alert("Error triggering training: " + e.message);
+            document.getElementById('trainingProgressArea').classList.add('d-none');
+            btn.disabled = false;
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        initCameraDevices();
+        loadTestHistory();
+    });
+</script>
+<!-- MediaPipe Hands & Camera Utils (Local with CDN fallback) -->
+<script src="/static/vendor/mediapipe/camera_utils.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';"></script>
+<script src="/static/vendor/mediapipe/hands.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';"></script>
+{% endblock %}

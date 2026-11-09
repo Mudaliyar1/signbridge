@@ -1,0 +1,106 @@
+/* SignBridge Professional Dark Theme */
+:root {
+    --sb-bg: #0d1117;
+    --sb-surface: #161b22;
+    --sb-surface-hover: #21262d;
+    --sb-border: rgba(255, 255, 255, 0.1);
+    --sb-primary: #388bfd;
+    --sb-primary-hover: #58a6ff;
+    --sb-text-main: #f0f6fc;
+    --sb-text-muted: #8b949e;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--sb-bg);
+    color: var(--sb-text-main);
+    overflow-x: hidden;
+}
+
+.bg-surface {
+    background-color: var(--sb-surface) !important;
+}
+
+.bg-dark {
+    background-color: var(--sb-bg) !important;
+}
+
+/* Sidebar styling */
+.sidebar {
+    width: 250px;
+    min-width: 250px;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar .list-group-item {
+    background-color: transparent;
+    color: var(--sb-text-muted);
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+}
+
+.sidebar .list-group-item:hover {
+    background-color: var(--sb-surface-hover);
+    color: #ffffff;
+}
+
+.sidebar .list-group-item.active {
+    background-color: rgba(56, 139, 253, 0.15);
+    color: var(--sb-primary);
+    font-weight: 600;
+}
+
+/* Status dots */
+.status-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* Stat Cards */
+.stat-card {
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.stat-card:hover {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.hover-primary:hover {
+    color: var(--sb-primary-hover) !important;
+}
+
+/* Tables */
+.table-dark {
+    --bs-table-bg: var(--sb-surface);
+    --bs-table-hover-bg: var(--sb-surface-hover);
+    color: var(--sb-text-main);
+}
+
+/* Form controls */
+.form-control, .form-select {
+    background-color: #0d1117 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #f0f6fc !important;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--sb-primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(56, 139, 253, 0.25) !important;
+}
+
+/* Pulse animation for Recording badge */
+@keyframes pulse-red {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.animate-pulse {
+    animation: pulse-red 1.2s infinite ease-in-out;
+}
