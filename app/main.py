@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from app.config import settings
@@ -77,6 +77,15 @@ async def health_check():
             "error": Database.get_last_error()
         }
     }
+
+# Global real-time hand detection endpoint for browser camera fallback
+@app.post("/api/detect-hand")
+async def detect_hand_global(
+    file: UploadFile | None = File(None),
+    frame_base64: str | None = Form(None)
+):
+    from app.routes.api_samples import detect_hand_live
+    return await detect_hand_live(model_id="global", file=file, frame_base64=frame_base64)
 
 # Register Routers
 app.include_router(admin_views.router)

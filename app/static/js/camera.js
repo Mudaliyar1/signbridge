@@ -1,8 +1,18 @@
 /**
- * SignBridge Automatic Hand & Finger Detection Engine
- * Uses MediaPipe Hands for real-time 21-point hand tracking, dynamic bounding box cropping,
- * stability-based auto-capture countdown, and automatic video start/stop on hand entry/departure.
- * Features built-in client-side WASM tracking with transparent server-side fallback.
+ * SignBridge Real-Time Hand & Finger Detection Engine
+ * 
+ * Powered by MediaPipe HandLandmarker with seamless zero-latency Server Fallback.
+ * Features:
+ *   - Continuous, non-freezing frame processing loop with live FPS calculation
+ *   - 21 hand-landmark tracking (wrist, joints, fingertips with color-coded skeleton)
+ *   - Dynamic square bounding-box calculation (~22% padding, clamped, face/body excluded)
+ *   - Strict hand presence gating (NO_HAND rejection for face-only or blank frames)
+ *   - Multi-hand support (Auto / Right / Left hand selection)
+ *   - Boundary clipping detection (warns if hand is partially off-screen)
+ *   - Image Mode: Stability-triggered 3-second auto-capture countdown & 224x224 crop review
+ *   - Video Mode: Automatic recording start on hand entry & auto-stop on departure (800ms debounce)
+ *   - Single-capture review gating (prevents duplicate continuous captures until Save/Retake)
+ *   - Live development diagnostics telemetry (FPS, frame count, confidence, bbox, status)
  */
 
 // Global State
@@ -14,7 +24,8 @@ let capturedMetadata = {
     handedness: null,
     confidence: null,
     bbox: null,
-    landmarks_count: 0
+    landmarks_count: 0,
+    preprocessing_version: 'hand_landmark_v1'
 };
 
 let currentMediaType = 'IMAGE'; // 'IMAGE' or 'VIDEO'
@@ -37,6 +48,7 @@ let lastDetectedHands = [];
 let primaryHand = null;
 let serverFallbackActive = false;
 let lastServerRequestTime = 0;
+let detectionAnimationId = null;
 
 // Stability & Countdown State
 let lastHandCenter = null;
@@ -73,7 +85,7 @@ const HAND_CONNECTIONS = [
     [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
 ];
 
-// Initialize on DOM Ready or immediately if DOM is already parsed
+// Initialize on DOM Ready
 function initializeCaptureStudio() {
     liveVideo = document.getElementById('liveVideo');
     trackingCanvas = document.getElementById('trackingCanvas');
@@ -146,14 +158,16 @@ if (document.readyState === 'loading') {
     initializeCaptureStudio();
 }
 
-// Update Diagnostics State Helper
+// ---------------- STATE & BADGE HELPERS ----------------
+
 function setCaptureState(newState) {
     captureState = newState;
     if (diagCaptureState) {
         diagCaptureState.textContent = newState;
         diagCaptureState.className = newState === 'RECORDING' ? 'text-danger fw-bold' :
                                     (newState === 'HAND_DETECTED' || newState === 'STABILIZING' ? 'text-success fw-bold' :
-                                    (newState === 'COUNTDOWN' ? 'text-warning fw-bold' : 'text-light'));
+                                    (newState === 'COUNTDOWN' ? 'text-warning fw-bold' : 
+                                    (newState === 'REVIEW' ? 'text-info fw-bold' : 'text-secondary')));
     }
 }
 
@@ -228,7 +242,7 @@ function onModeChange(mode) {
     retakeMedia();
 }
 
-// ---------------- MEDIAPIPE HANDS INITIALIZATION ----------------
+// ---------------- MEDIAPIPE INITIALIZATION ----------------
 
 function initMediaPipeHands() {
     if (diagMpRuntime) {
@@ -237,8 +251,8 @@ function initMediaPipeHands() {
     }
 
     if (typeof Hands === 'undefined') {
-        console.warn('[SignBridge] MediaPipe Hands global object undefined. Retrying in 400ms...');
-        setTimeout(initMediaPipeHands, 400);
+        console.warn('[SignBridge] MediaPipe Hands global object undefined. Retrying in 300ms...');
+        setTimeout(initMediaPipeHands, 300);
         return;
     }
 
@@ -252,10 +266,9 @@ function initMediaPipeHands() {
             diagHandLandmarker.className = 'text-warning';
         }
 
-        // Initialize MediaPipe Hands
+        // Initialize MediaPipe Hands with local vendor bundle (and CDN fallback)
         handsDetector = new Hands({
             locateFile: (file) => {
-                // Try local vendor path with fallback
                 return `/static/vendor/mediapipe/${file}`;
             }
         });
@@ -279,10 +292,10 @@ function initMediaPipeHands() {
         }
         console.log('[SignBridge] MediaPipe Hands initialized successfully.');
     } catch (e) {
-        console.error('[SignBridge] MediaPipe Hands init error:', e);
+        console.warn('[SignBridge] MediaPipe Hands init error, activating server fallback:', e);
         serverFallbackActive = true;
         if (diagHandLandmarker) {
-            diagHandLandmarker.textContent = 'FALLBACK (SERVER)';
+            diagHandLandmarker.textContent = 'SERVER FALLBACK';
             diagHandLandmarker.className = 'text-info';
         }
         if (diagLastError) {
@@ -296,12 +309,12 @@ function initMediaPipeHands() {
 
 async function startCamera(deviceId = null) {
     if (diagCameraState) {
-        diagCameraState.textContent = 'REQUESTING...';
+        diagCameraState.textContent = 'CONNECTING...';
         diagCameraState.className = 'text-warning';
     }
     if (cameraStatusBadge) {
         cameraStatusBadge.className = 'badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25';
-        cameraStatusBadge.textContent = 'Requesting access...';
+        cameraStatusBadge.textContent = 'Connecting Camera...';
     }
     if (cameraErrorOverlay) {
         cameraErrorOverlay.classList.add('d-none');
@@ -323,6 +336,14 @@ async function startCamera(deviceId = null) {
         if (liveVideo) {
             liveVideo.srcObject = mediaStream;
             await liveVideo.play();
+
+            // Wait for video dimensions to be established
+            if (liveVideo.readyState < 2 || !liveVideo.videoWidth) {
+                await new Promise(resolve => {
+                    liveVideo.onloadeddata = () => resolve();
+                    setTimeout(resolve, 600);
+                });
+            }
 
             const vw = liveVideo.videoWidth || 1280;
             const vh = liveVideo.videoHeight || 720;
@@ -394,63 +415,95 @@ function switchCamera(deviceId) {
     }
 }
 
-// Continuous Frame Loop
+// ---------------- CONTINUOUS NON-FREEZING FRAME LOOP ----------------
+
 function startDetectionLoop() {
-    let lastFrameTime = performance.now();
+    // Cancel any previous loop to prevent overlapping duplicate runners
+    if (detectionAnimationId) {
+        cancelAnimationFrame(detectionAnimationId);
+        detectionAnimationId = null;
+    }
+
+    let frameCountThisSecond = 0;
+    lastFpsCalculationTime = performance.now();
 
     async function processFrame(now) {
         if (!mediaStream || !liveVideo || liveVideo.paused || liveVideo.ended || captureState === 'REVIEW') {
-            requestAnimationFrame(processFrame);
+            detectionAnimationId = requestAnimationFrame(processFrame);
             return;
         }
 
-        // 1. Client-Side WASM MediaPipe Detection
-        if (handsDetector && !serverFallbackActive && liveVideo.readyState >= 2 && !isDetecting) {
+        // Only process if video has valid frame data and not currently executing an async detection
+        if (liveVideo.readyState >= 2 && !isDetecting) {
             isDetecting = true;
-            try {
-                await handsDetector.send({ image: liveVideo });
+            let frameEvaluated = false;
+
+            // 1. Try Client WASM MediaPipe Detection
+            if (handsDetector && !serverFallbackActive) {
+                try {
+                    // Safety timeout: 2500ms on first frame (WASM compilation), 400ms on subsequent frames
+                    const timeoutMs = framesProcessedCount === 0 ? 2500 : 400;
+                    let timer;
+                    const timeoutPromise = new Promise((_, reject) => {
+                        timer = setTimeout(() => reject(new Error('MediaPipe WASM detection timeout')), timeoutMs);
+                    });
+
+                    await Promise.race([
+                        handsDetector.send({ image: liveVideo }),
+                        timeoutPromise
+                    ]);
+                    clearTimeout(timer);
+                    frameEvaluated = true;
+                } catch (e) {
+                    console.warn('[SignBridge] Client MediaPipe send error, falling back to server detection:', e.message);
+                    serverFallbackActive = true;
+                    if (diagHandLandmarker) {
+                        diagHandLandmarker.textContent = 'SERVER FALLBACK';
+                        diagHandLandmarker.className = 'text-info';
+                    }
+                }
+            }
+
+            // 2. Server-Side MediaPipe Fallback Frame Sampling (~8-10 FPS)
+            if (!frameEvaluated && (serverFallbackActive || !handsDetector)) {
+                if (now - lastServerRequestTime >= 110) {
+                    lastServerRequestTime = now;
+                    try {
+                        await sendFrameToServerForDetection();
+                        frameEvaluated = true;
+                    } catch (err) {
+                        console.warn('Server fallback request error:', err);
+                    }
+                }
+            }
+
+            // 3. Update Real-Time Diagnostics (Frames Processed & FPS)
+            if (frameEvaluated) {
                 framesProcessedCount++;
                 if (diagFramesProcessed) {
                     diagFramesProcessed.textContent = framesProcessedCount;
                 }
 
-                // Calculate Live FPS
-                fpsFrameCount++;
-                const elapsed = now - lastFpsCalculationTime;
-                if (elapsed >= 1000) {
-                    const currentFps = Math.round((fpsFrameCount * 1000) / elapsed);
+                frameCountThisSecond++;
+                const elapsedSinceLastFps = now - lastFpsCalculationTime;
+                if (elapsedSinceLastFps >= 1000) {
+                    const currentFps = Math.round((frameCountThisSecond * 1000) / elapsedSinceLastFps);
                     if (diagFpsBadge) {
                         diagFpsBadge.textContent = `${currentFps} FPS`;
+                        diagFpsBadge.className = currentFps >= 8 ? 'badge bg-success' : 'badge bg-warning text-dark';
                     }
-                    fpsFrameCount = 0;
+                    frameCountThisSecond = 0;
                     lastFpsCalculationTime = now;
                 }
-            } catch (e) {
-                console.warn('[SignBridge] Client MediaPipe send error, falling back to server detection:', e);
-                serverFallbackActive = true;
-                if (diagHandLandmarker) {
-                    diagHandLandmarker.textContent = 'SERVER FALLBACK';
-                    diagHandLandmarker.className = 'text-info';
-                }
-            } finally {
-                isDetecting = false;
             }
-        } 
-        // 2. Server-Side MediaPipe Fallback Frame Sampling (every 160ms)
-        else if ((serverFallbackActive || !handsDetector) && liveVideo.readyState >= 2 && !isDetecting) {
-            if (now - lastServerRequestTime >= 160) {
-                lastServerRequestTime = now;
-                isDetecting = true;
-                sendFrameToServerForDetection().finally(() => {
-                    isDetecting = false;
-                });
-            }
+
+            isDetecting = false;
         }
 
-        requestAnimationFrame(processFrame);
+        detectionAnimationId = requestAnimationFrame(processFrame);
     }
 
-    requestAnimationFrame(processFrame);
+    detectionAnimationId = requestAnimationFrame(processFrame);
 }
 
 // Server Fallback: sends a lightweight snapshot frame for server MediaPipe processing
@@ -467,17 +520,17 @@ async function sendFrameToServerForDetection() {
         const formData = new FormData();
         formData.append('frame_base64', base64Data);
 
-        const resp = await fetch(`/api/models/${typeof MODEL_ID !== 'undefined' ? MODEL_ID : ''}/detect-hand`, {
+        const targetUrl = (typeof MODEL_ID !== 'undefined' && MODEL_ID) 
+            ? `/api/models/${MODEL_ID}/detect-hand` 
+            : `/api/detect-hand`;
+
+        const resp = await fetch(targetUrl, {
             method: 'POST',
             body: formData
         });
         const data = await resp.json();
 
-        framesProcessedCount++;
-        if (diagFramesProcessed) diagFramesProcessed.textContent = framesProcessedCount;
-
         if (data.success && data.hand_present && data.hands && data.hands.length > 0) {
-            // Convert server detection into MediaPipe format
             const mpFormat = {
                 multiHandLandmarks: data.hands.map(h => h.landmarks || []),
                 multiHandedness: data.hands.map(h => ({
@@ -490,7 +543,7 @@ async function sendFrameToServerForDetection() {
             onHandResults({ multiHandLandmarks: [], multiHandedness: [] });
         }
     } catch (err) {
-        console.warn('Server fallback frame error:', err);
+        console.warn('Server fallback request error:', err);
     }
 }
 
@@ -503,7 +556,7 @@ function onHandResults(results) {
     if (!canvas || !liveVideo) return;
     const ctx = canvas.getContext('2d');
 
-    // Synchronize canvas size with displayed video stream
+    // Synchronize canvas coordinate resolution with displayed video stream
     const vw = liveVideo.videoWidth || 640;
     const vh = liveVideo.videoHeight || 480;
     if (canvas.width !== vw || canvas.height !== vh) {
@@ -554,19 +607,28 @@ function onHandResults(results) {
             if (lm.y > maxY) maxY = lm.y;
         }
 
+        // Detect if hand is partially cut off at camera frame boundary
+        const isPartiallyOffscreen = (minX <= 0.015 || maxX >= 0.985 || minY <= 0.015 || maxY >= 0.985);
+
         // Padding around hand (22%) + Force Square Aspect Ratio (1:1)
-        const boxW = maxX - minX;
-        const boxH = maxY - minY;
+        const boxW = Math.max(0.02, maxX - minX);
+        const boxH = Math.max(0.02, maxY - minY);
         const padW = boxW * 0.22;
         const padH = boxH * 0.22;
         const cx = (minX + maxX) / 2.0;
         const cy = (minY + maxY) / 2.0;
         const side = Math.max(boxW + 2 * padW, boxH + 2 * padH);
 
-        const sqYmin = Math.max(0.0, cy - side / 2.0);
-        const sqYmax = Math.min(1.0, cy + side / 2.0);
-        const sqXmin = Math.max(0.0, cx - side / 2.0);
-        const sqXmax = Math.min(1.0, cx + side / 2.0);
+        // Compute square crop bounds shifted safely within image boundaries
+        let sqYmin = cy - side / 2.0;
+        let sqYmax = cy + side / 2.0;
+        let sqXmin = cx - side / 2.0;
+        let sqXmax = cx + side / 2.0;
+
+        if (sqYmin < 0.0) { sqYmax = Math.min(1.0, sqYmax - sqYmin); sqYmin = 0.0; }
+        if (sqYmax > 1.0) { sqYmin = Math.max(0.0, sqYmin - (sqYmax - 1.0)); sqYmax = 1.0; }
+        if (sqXmin < 0.0) { sqXmax = Math.min(1.0, sqXmax - sqXmin); sqXmin = 0.0; }
+        if (sqXmax > 1.0) { sqXmin = Math.max(0.0, sqXmin - (sqXmax - 1.0)); sqXmax = 1.0; }
 
         const area = (sqYmax - sqYmin) * (sqXmax - sqXmin);
 
@@ -575,6 +637,7 @@ function onHandResults(results) {
             landmarks: landmarks,
             handedness: handednessLabel,
             confidence: conf,
+            isPartiallyOffscreen: isPartiallyOffscreen,
             bbox: { ymin: sqYmin, xmin: sqXmin, ymax: sqYmax, xmax: sqXmax },
             pixelBbox: {
                 y1: Math.round(sqYmin * canvas.height),
@@ -627,6 +690,12 @@ function onHandResults(results) {
     }
 
     // Process State Automation
+    if (primaryHand.isPartiallyOffscreen) {
+        updateHandStateBadge('BRING HAND FULLY INTO VIEW', 'bg-warning text-dark fw-bold');
+        cancelCountdown();
+        return;
+    }
+
     if (currentMediaType === 'IMAGE') {
         handleImageStabilityAndAutoCapture(primaryHand);
     } else if (currentMediaType === 'VIDEO') {
@@ -667,7 +736,7 @@ function handleNoHandsDetected(ctx, canvas) {
         updateHandStateBadge('WAITING FOR HAND', 'bg-secondary bg-opacity-25 text-secondary');
         if (handStatsBadge) handStatsBadge.classList.add('d-none');
     } else {
-        // Hand Disappeared During Recording: Trigger 800ms debounce
+        // Hand Disappeared During Recording: Trigger debounce
         updateHandStateBadge('HAND LOST (STOPPING...)', 'bg-warning bg-opacity-25 text-warning');
         if (!disappearanceTimer) {
             disappearanceTimer = setTimeout(() => {
@@ -689,35 +758,43 @@ function drawHandTracking(ctx, canvas, allHands, targetHand) {
         const bw = pb.x2 - pb.x1;
         const bh = pb.y2 - pb.y1;
 
-        // 1. Draw Dynamic Bounding Box around hand
+        // 1. Draw Dynamic Bounding Box around hand only (face & body excluded)
         ctx.save();
-        ctx.strokeStyle = isPrimary ? '#00d2ff' : 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = isPrimary ? 2.5 : 1.5;
-        ctx.setLineDash(isPrimary ? [8, 4] : [4, 4]);
+        if (hand.isPartiallyOffscreen) {
+            ctx.strokeStyle = '#ff9900';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+        } else {
+            ctx.strokeStyle = isPrimary ? '#00e5ff' : 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = isPrimary ? 3.0 : 1.5;
+            ctx.setLineDash(isPrimary ? [8, 4] : [4, 4]);
+        }
         ctx.strokeRect(pb.x1, pb.y1, bw, bh);
         ctx.restore();
 
         // 2. Dynamic Label Tag above hand
         ctx.save();
-        const tagText = `✋ ${hand.handedness} Hand (${Math.round(hand.confidence * 100)}%)`;
+        const tagText = hand.isPartiallyOffscreen 
+            ? `⚠️ Bring Hand In Frame` 
+            : `✋ ${hand.handedness} Hand (${Math.round(hand.confidence * 100)}%)`;
         ctx.font = 'bold 12px Inter, sans-serif';
         const tagWidth = ctx.measureText(tagText).width + 16;
         const tagHeight = 22;
-        const tagY = Math.max(0, pb.y1 - tagHeight - 2);
+        const tagY = Math.max(0, pb.y1 - tagHeight - 4);
 
-        ctx.fillStyle = isPrimary ? '#00d2ff' : 'rgba(100, 116, 139, 0.9)';
+        ctx.fillStyle = hand.isPartiallyOffscreen ? '#ff9900' : (isPrimary ? '#00e5ff' : 'rgba(100, 116, 139, 0.9)');
         ctx.fillRect(pb.x1, tagY, tagWidth, tagHeight);
 
-        ctx.fillStyle = isPrimary ? '#000000' : '#ffffff';
+        ctx.fillStyle = '#000000';
         ctx.fillText(tagText, pb.x1 + 8, tagY + 15);
         ctx.restore();
 
-        // 3. Draw 21 Hand Landmarks & Skeleton if enabled
+        // 3. Draw 21 Hand Landmarks & Color-Coded Skeleton
         if (showLandmarks && hand.landmarks) {
             // Draw Bone Connections
             ctx.save();
-            ctx.strokeStyle = isPrimary ? 'rgba(0, 255, 136, 0.85)' : 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 2.0;
+            ctx.strokeStyle = isPrimary ? 'rgba(0, 255, 136, 0.90)' : 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2.2;
 
             HAND_CONNECTIONS.forEach(([i, j]) => {
                 const p1 = hand.landmarks[i];
@@ -737,18 +814,20 @@ function drawHandTracking(ctx, canvas, allHands, targetHand) {
                 const ly = lm.y * canvas.height;
 
                 ctx.beginPath();
-                ctx.arc(lx, ly, idx === 0 ? 5.5 : 3.5, 0, 2 * Math.PI);
-                // Wrist: Coral Red, Tips: Cyan, Joints: Neon Green
+                // Wrist (0): 6px, Fingertips (4, 8, 12, 16, 20): 5px, Joints: 4px
+                const radius = idx === 0 ? 6.0 : (idx % 4 === 0 ? 5.0 : 3.8);
+                ctx.arc(lx, ly, radius, 0, 2 * Math.PI);
+
                 if (idx === 0) {
-                    ctx.fillStyle = '#ff0055';
+                    ctx.fillStyle = '#ff0055'; // Wrist: Vivid Red/Pink
                 } else if (idx % 4 === 0) {
-                    ctx.fillStyle = '#00ffff';
+                    ctx.fillStyle = '#00ffff'; // Fingertips: Vivid Cyan
                 } else {
-                    ctx.fillStyle = '#00ff88';
+                    ctx.fillStyle = '#00ff66'; // Joints: Electric Green
                 }
                 ctx.fill();
                 ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 1.2;
                 ctx.stroke();
             });
         }
@@ -759,8 +838,10 @@ function drawHandTracking(ctx, canvas, allHands, targetHand) {
 
 function handleImageStabilityAndAutoCapture(hand) {
     if (!autoCaptureEnabled || captureState === 'REVIEW') {
-        setCaptureState('HAND_DETECTED');
-        updateHandStateBadge('HAND DETECTED', 'bg-success bg-opacity-25 text-success');
+        if (captureState !== 'REVIEW') {
+            setCaptureState('HAND_DETECTED');
+            updateHandStateBadge('HAND DETECTED', 'bg-success bg-opacity-25 text-success');
+        }
         return;
     }
 
@@ -790,7 +871,7 @@ function handleImageStabilityAndAutoCapture(hand) {
 
         if (captureState === 'COUNTDOWN') {
             cancelCountdown();
-            if (countdownLabel) countdownLabel.textContent = 'Keep hand steady...';
+            if (countdownLabel) countdownLabel.textContent = 'Hold Hand Steady';
         }
         setCaptureState('HAND_DETECTED');
         updateHandStateBadge('STABILIZING HAND...', 'bg-info bg-opacity-25 text-info');
@@ -864,7 +945,7 @@ function executeHandCropCapture(hand) {
     const cropW = Math.max(10, pb.x2 - pb.x1);
     const cropH = Math.max(10, pb.y2 - pb.y1);
 
-    // Render exact 224x224 hand crop onto snapshotCanvas
+    // Render exact 224x224 hand crop onto snapshotCanvas (face, body, background excluded)
     snapshotCanvas.width = 224;
     snapshotCanvas.height = 224;
     const sCtx = snapshotCanvas.getContext('2d');
@@ -905,7 +986,7 @@ function executeHandCropCapture(hand) {
 
 function handleVideoAutoRecording(hand) {
     if (!autoCaptureEnabled || captureState === 'REVIEW') {
-        if (captureState !== 'RECORDING') {
+        if (captureState !== 'RECORDING' && captureState !== 'REVIEW') {
             setCaptureState('HAND_DETECTED');
             updateHandStateBadge('HAND DETECTED', 'bg-success bg-opacity-25 text-success');
         }

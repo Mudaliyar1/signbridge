@@ -580,7 +580,7 @@
                                     <i class="bi bi-hand-index-thumb me-1"></i><span id="liveHandStatsText">Hand: --</span>
                                 </span>
                                 <video id="liveStreamVideo" autoplay playsinline muted class="w-100 h-100 object-fit-contain d-none"></video>
-                                <canvas id="liveTrackingCanvas" class="position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none; z-index: 10;"></canvas>
+                                <canvas id="liveTrackingCanvas" class="position-absolute top-0 start-0 w-100 h-100 object-fit-contain" style="pointer-events: none; z-index: 10;"></canvas>
                                 <canvas id="liveCaptureCanvas" class="d-none"></canvas>
 
                                 <div id="liveOffPlaceholder" class="text-center text-secondary p-5">
@@ -1464,7 +1464,10 @@
         // Process client-side hand tracking frame
         if (liveHandsTracker) {
             try {
-                await liveHandsTracker.send({ image: video });
+                let timer;
+                const timeoutPromise = new Promise((_, reject) => { timer = setTimeout(reject, 350); });
+                await Promise.race([liveHandsTracker.send({ image: video }), timeoutPromise]);
+                clearTimeout(timer);
             } catch (e) {
                 // Tracking frame error ignore
             }
