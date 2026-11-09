@@ -27,3 +27,4 @@ If you discover a security vulnerability (such as exposed credentials, unauthori
 
 - Never commit your `.env` file to version control.
 - Ensure all cloud storage credentials (Cloudinary API secrets, MongoDB Atlas connection strings) are stored as environment variables.
+

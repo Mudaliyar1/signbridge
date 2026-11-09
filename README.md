@@ -353,3 +353,4 @@ If you utilize SignBridge for academic coursework, research, or assistive techno
 ## 📄 License
 
 This project is open-source under the [MIT License](LICENSE).
+
